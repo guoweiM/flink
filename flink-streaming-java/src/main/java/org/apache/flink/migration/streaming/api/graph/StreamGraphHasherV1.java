@@ -160,7 +160,7 @@ public class StreamGraphHasherV1 implements StreamGraphHasher {
 			// has chained outputs.
 			for (StreamEdge inEdge : node.getInEdges()) {
 				if (isChainable(inEdge, isChainingEnabled)) {
-					throw new UnsupportedOperationException("Cannot assign user-specified hash "
+					LOG.warn("Cannot assign user-specified hash "
 							+ "to intermediate node in chain. This will be supported in future "
 							+ "versions of Flink. As a work around start new chain at task "
 							+ node.getOperatorName() + ".");
