@@ -68,6 +68,8 @@ public class ExecutionJobVertex implements AccessExecutionJobVertex, Archiveable
 	private final ExecutionGraph graph;
 	
 	private final JobVertex jobVertex;
+
+	private final JobVertexID[] operatorIDs;
 	
 	private final ExecutionVertex[] taskVertices;
 
@@ -139,6 +141,8 @@ public class ExecutionJobVertex implements AccessExecutionJobVertex, Archiveable
 		this.serializedTaskInformation = null;
 
 		this.taskVertices = new ExecutionVertex[numTaskVertices];
+		List<JobVertexID> opIDs = jobVertex.getOperatorIDs();
+		this.operatorIDs = jobVertex.getOperatorIDs().toArray(new JobVertexID[opIDs.size()]);
 		
 		this.inputs = new ArrayList<>(jobVertex.getInputs().size());
 		
@@ -212,6 +216,10 @@ public class ExecutionJobVertex implements AccessExecutionJobVertex, Archiveable
 		}
 		
 		finishedSubtasks = new boolean[parallelism];
+	}
+
+	public JobVertexID[] getOperatorIDs() {
+		return operatorIDs;
 	}
 
 	public void setMaxParallelism(int maxParallelismDerived) {

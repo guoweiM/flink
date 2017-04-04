@@ -132,7 +132,9 @@ public class StreamingJobGraphGenerator {
 			legacyHashes.add(hasher.traverseStreamGraphAndGenerateHashes(streamGraph));
 		}
 
-		setChaining(hashes, legacyHashes);
+		Map<Integer, List<byte[]>> chainedOperatorHashes = new HashMap<>();
+		
+		setChaining(hashes, legacyHashes, chainedOperatorHashes);
 
 		setPhysicalEdges();
 
@@ -182,9 +184,9 @@ public class StreamingJobGraphGenerator {
 	 *
 	 * <p>This will recursively create all {@link JobVertex} instances.
 	 */
-	private void setChaining(Map<Integer, byte[]> hashes, List<Map<Integer, byte[]>> legacyHashes) {
+	private void setChaining(Map<Integer, byte[]> hashes, List<Map<Integer, byte[]>> legacyHashes, Map<Integer, List<byte[]>> chainedOperatorHashes) {
 		for (Integer sourceNodeId : streamGraph.getSourceIDs()) {
-			createChain(sourceNodeId, sourceNodeId, hashes, legacyHashes, 0);
+			createChain(sourceNodeId, sourceNodeId, hashes, legacyHashes, 0, chainedOperatorHashes);
 		}
 	}
 
@@ -193,7 +195,8 @@ public class StreamingJobGraphGenerator {
 			Integer currentNodeId,
 			Map<Integer, byte[]> hashes,
 			List<Map<Integer, byte[]>> legacyHashes,
-			int chainIndex) {
+			int chainIndex,
+			Map<Integer, List<byte[]>> chainedOperatorHashes) {
 
 		if (!builtVertices.contains(startNodeId)) {
 
@@ -210,14 +213,22 @@ public class StreamingJobGraphGenerator {
 				}
 			}
 
+			List<byte[]> operatorHashes = chainedOperatorHashes.get(startNodeId);
+			if (operatorHashes == null) {
+				operatorHashes = new ArrayList<>();
+				chainedOperatorHashes.put(startNodeId, operatorHashes);
+				operatorHashes.add(hashes.get(startNodeId));
+			}
+			
 			for (StreamEdge chainable : chainableOutputs) {
+				operatorHashes.add(hashes.get(chainable.getTargetId()));
 				transitiveOutEdges.addAll(
-						createChain(startNodeId, chainable.getTargetId(), hashes, legacyHashes, chainIndex + 1));
+						createChain(startNodeId, chainable.getTargetId(), hashes, legacyHashes, chainIndex + 1, chainedOperatorHashes));
 			}
 
 			for (StreamEdge nonChainable : nonChainableOutputs) {
 				transitiveOutEdges.add(nonChainable);
-				createChain(nonChainable.getTargetId(), nonChainable.getTargetId(), hashes, legacyHashes, 0);
+				createChain(nonChainable.getTargetId(), nonChainable.getTargetId(), hashes, legacyHashes, 0, chainedOperatorHashes);
 			}
 
 			chainedNames.put(currentNodeId, createChainedName(currentNodeId, chainableOutputs));
@@ -225,7 +236,7 @@ public class StreamingJobGraphGenerator {
 			chainedPreferredResources.put(currentNodeId, createChainedPreferredResources(currentNodeId, chainableOutputs));
 
 			StreamConfig config = currentNodeId.equals(startNodeId)
-					? createJobVertex(startNodeId, hashes, legacyHashes)
+					? createJobVertex(startNodeId, hashes, legacyHashes, chainedOperatorHashes)
 					: new StreamConfig(new Configuration());
 
 			setVertexConfig(currentNodeId, config, chainableOutputs, nonChainableOutputs);
@@ -300,7 +311,8 @@ public class StreamingJobGraphGenerator {
 	private StreamConfig createJobVertex(
 			Integer streamNodeId,
 			Map<Integer, byte[]> hashes,
-			List<Map<Integer, byte[]>> legacyHashes) {
+			List<Map<Integer, byte[]>> legacyHashes,
+			Map<Integer, List<byte[]>> chainedOperatorHashes) {
 
 		JobVertex jobVertex;
 		StreamNode streamNode = streamGraph.getStreamNode(streamNodeId);
@@ -322,18 +334,28 @@ public class StreamingJobGraphGenerator {
 			}
 		}
 
+		List<byte[]> chainedOperators = chainedOperatorHashes.get(streamNodeId);
+		List<JobVertexID> chainedOperatorVertexIds = new ArrayList<>();
+		if (chainedOperators != null) {
+			for (byte[] chainedOperator : chainedOperators) {
+				chainedOperatorVertexIds.add(new JobVertexID(chainedOperator));
+			}
+		}
+
 		if (streamNode.getInputFormat() != null) {
 			jobVertex = new InputFormatVertex(
 					chainedNames.get(streamNodeId),
 					jobVertexId,
-					legacyJobVertexIds);
+					legacyJobVertexIds,
+					chainedOperatorVertexIds);
 			TaskConfig taskConfig = new TaskConfig(jobVertex.getConfiguration());
 			taskConfig.setStubWrapper(new UserCodeObjectWrapper<Object>(streamNode.getInputFormat()));
 		} else {
 			jobVertex = new JobVertex(
 					chainedNames.get(streamNodeId),
 					jobVertexId,
-					legacyJobVertexIds);
+					legacyJobVertexIds,
+					chainedOperatorVertexIds);
 		}
 
 		jobVertex.setResources(chainedMinResources.get(streamNodeId), chainedPreferredResources.get(streamNodeId));

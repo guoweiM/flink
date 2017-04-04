@@ -50,6 +50,8 @@ public class JobVertex implements java.io.Serializable {
 	/** The ID of the vertex. */
 	private final JobVertexID id;
 
+	private final ArrayList<JobVertexID> operatorIDs = new ArrayList<>();
+
 	private final ArrayList<JobVertexID> idAlternatives = new ArrayList<>();
 
 	/** List of produced data sets, one per writer */
@@ -134,10 +136,11 @@ public class JobVertex implements java.io.Serializable {
 	 * @param primaryId The id of the job vertex.
 	 * @param alternativeIds The alternative ids of the job vertex.
 	 */
-	public JobVertex(String name, JobVertexID primaryId, List<JobVertexID> alternativeIds) {
+	public JobVertex(String name, JobVertexID primaryId, List<JobVertexID> alternativeIds, List<JobVertexID> operatorIds) {
 		this.name = name == null ? DEFAULT_NAME : name;
 		this.id = primaryId == null ? new JobVertexID() : primaryId;
 		this.idAlternatives.addAll(alternativeIds);
+		this.operatorIDs.addAll(operatorIds);
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -194,6 +197,10 @@ public class JobVertex implements java.io.Serializable {
 	 */
 	public int getNumberOfInputs() {
 		return this.inputs.size();
+	}
+
+	public List<JobVertexID> getOperatorIDs() {
+		return operatorIDs;
 	}
 
 	/**

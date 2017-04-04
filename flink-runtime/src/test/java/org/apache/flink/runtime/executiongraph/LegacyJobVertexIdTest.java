@@ -30,6 +30,7 @@ import org.apache.flink.util.SerializedValue;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -46,7 +47,7 @@ public class LegacyJobVertexIdTest {
 		JobVertexID legacyId1 = new JobVertexID();
 		JobVertexID legacyId2 = new JobVertexID();
 
-		JobVertex jobVertex = new JobVertex("test", defaultId, Arrays.asList(legacyId1, legacyId2));
+		JobVertex jobVertex = new JobVertex("test", defaultId, Arrays.asList(legacyId1, legacyId2), new ArrayList<JobVertexID>());
 		jobVertex.setInvokableClass(AbstractInvokable.class);
 
 		ExecutionGraph executionGraph = new ExecutionGraph(
