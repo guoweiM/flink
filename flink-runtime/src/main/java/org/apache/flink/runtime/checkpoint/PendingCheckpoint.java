@@ -21,13 +21,14 @@ package org.apache.flink.runtime.checkpoint;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.checkpoint.savepoint.Savepoint;
 import org.apache.flink.runtime.checkpoint.savepoint.SavepointStore;
-import org.apache.flink.migration.runtime.checkpoint.savepoint.SavepointV1;
+import org.apache.flink.runtime.checkpoint.savepoint.SavepointV2;
 import org.apache.flink.runtime.concurrent.Future;
 import org.apache.flink.runtime.concurrent.impl.FlinkCompletableFuture;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.state.ChainedStateHandle;
+import org.apache.flink.runtime.state.KeyedStateHandle;
 import org.apache.flink.runtime.state.OperatorStateHandle;
 import org.apache.flink.runtime.state.StateUtil;
 import org.apache.flink.runtime.state.StreamStateHandle;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -242,7 +244,7 @@ public class PendingCheckpoint {
 			// make sure we fulfill the promise with an exception if something fails
 			try {
 				// externalize the metadata
-				final Savepoint savepoint = new SavepointV1(checkpointId, taskStates.values());
+				final Savepoint savepoint = new SavepointV2(checkpointId, taskStates.values());
 
 				// TEMP FIX - The savepoint store is strictly typed to file systems currently
 				//            but the checkpoints think more generic. we need to work with file handles
@@ -360,41 +362,53 @@ public class PendingCheckpoint {
 				acknowledgedTasks.add(executionAttemptId);
 			}
 
-			JobVertexID jobVertexID = vertex.getJobvertexId();
+			JobVertexID[] operatorIDs = vertex.getJobVertex().getOperatorIDs();
 			int subtaskIndex = vertex.getParallelSubtaskIndex();
 			long ackTimestamp = System.currentTimeMillis();
 
 			long stateSize = 0;
-			if (null != subtaskState) {
-				TaskState taskState = taskStates.get(jobVertexID);
+			if (subtaskState != null) {
+				stateSize = subtaskState.getStateSize();
 
-				if (null == taskState) {
-					@SuppressWarnings("deprecation")
-					ChainedStateHandle<StreamStateHandle> nonPartitionedState = 
-							subtaskState.getLegacyOperatorState();
-					ChainedStateHandle<OperatorStateHandle> partitioneableState =
-							subtaskState.getManagedOperatorState();
-					//TODO this should go away when we remove chained state, assigning state to operators directly instead
-					int chainLength;
-					if (nonPartitionedState != null) {
-						chainLength = nonPartitionedState.getLength();
-					} else if (partitioneableState != null) {
-						chainLength = partitioneableState.getLength();
-					} else {
-						chainLength = 1;
-					}
+				@SuppressWarnings("deprecation")
+				ChainedStateHandle<StreamStateHandle> nonPartitionedState =
+					subtaskState.getLegacyOperatorState();
+				ChainedStateHandle<OperatorStateHandle> partitioneableState =
+					subtaskState.getManagedOperatorState();
+				ChainedStateHandle<OperatorStateHandle> rawOperatorState =
+					subtaskState.getRawOperatorState();
 
-					taskState = new TaskState(
-							jobVertexID,
+				for (int x = 0; x < operatorIDs.length; x++) {
+					JobVertexID operatorID = operatorIDs[x];
+					TaskState operatorState = taskStates.get(operatorID);
+
+					if (operatorState == null) {
+						operatorState = new TaskState(
+							operatorID,
 							vertex.getTotalNumberOfParallelSubtasks(),
 							vertex.getMaxParallelism(),
-							chainLength);
+							1
+						);
+						taskStates.put(operatorID, operatorState);
+					}
 
-					taskStates.put(jobVertexID, taskState);
+					KeyedStateHandle managedKeyedState = null;
+					KeyedStateHandle rawKeyedState = null;
+					if (x == 0) {
+						managedKeyedState = subtaskState.getManagedKeyedState();
+						rawKeyedState = subtaskState.getRawKeyedState();
+					}
+					// we have to reverse the index here since the streaming API stores the state in reverse order
+					int adjustedIndex = operatorIDs.length - 1 - x;
+					SubtaskState operatorSubtaskState = new SubtaskState(
+						new ChainedStateHandle<>(Collections.singletonList(nonPartitionedState.get(adjustedIndex))),
+						new ChainedStateHandle<>(Collections.singletonList(partitioneableState.get(adjustedIndex))),
+						new ChainedStateHandle<>(Collections.singletonList(rawOperatorState.get(adjustedIndex))),
+						managedKeyedState,
+						rawKeyedState);
+
+					operatorState.putState(subtaskIndex, operatorSubtaskState);
 				}
-
-				taskState.putState(subtaskIndex, subtaskState);
-				stateSize = subtaskState.getStateSize();
 			}
 
 			++numAcknowledgedTasks;
@@ -415,7 +429,7 @@ public class PendingCheckpoint {
 					metrics.getBytesBufferedInAlignment(),
 					alignmentDurationMillis);
 
-				statsCallback.reportSubtaskStats(jobVertexID, subtaskStateStats);
+				statsCallback.reportSubtaskStats(vertex.getJobvertexId(), subtaskStateStats);
 			}
 
 			return TaskAcknowledgeResult.SUCCESS;
