@@ -33,12 +33,11 @@ public class ChainBreakTest extends AbstractOperatorRestoreTestBase {
 		positiveMap.startNewChain();
 
 		SingleOutputStreamOperator<Integer> negativeMap = Utils.createNegativeMap(positiveMap, true);
-		// commenting the following line should cause the job to succeed
 		negativeMap.startNewChain();
 	}
 
 	@Override
 	protected String getSavepointName() {
-		return "savepoint-4a3952-c3835309e2dc";
+		return "chainBreak";
 	}
 }

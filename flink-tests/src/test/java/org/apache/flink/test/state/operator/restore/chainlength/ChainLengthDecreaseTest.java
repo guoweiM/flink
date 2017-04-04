@@ -29,16 +29,12 @@ public class ChainLengthDecreaseTest extends AbstractOperatorRestoreTestBase {
 
 	@Override
 	protected void createOperators(DataStream<Integer> source) {
-		// adding this operator before negativeMap should cause the job to succeed
-		//SingleOutputStreamOperator<Integer> positiveMap = Utils.createPositiveMap(source, restored);
-		//positiveMap.startNewChain();
-
 		SingleOutputStreamOperator<Integer> negativeMap = Utils.createNegativeMap(source, true);
 		negativeMap.startNewChain();
 	}
 
 	@Override
 	protected String getSavepointName() {
-		return "savepoint-688e80-7dd67df6a924";
+		return "chainLength";
 	}
 }

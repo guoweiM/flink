@@ -33,7 +33,6 @@ public class ChainLengthIncreaseTest extends AbstractOperatorRestoreTestBase {
 		SingleOutputStreamOperator<Integer> positiveMap = Utils.createPositiveMap(source, true);
 		positiveMap.startNewChain();
 
-		// removing this operator should cause the job to succeed
 		SingleOutputStreamOperator<Integer> positiveMap2 = Utils.createPositiveMap(positiveMap, true);
 		positiveMap2.uid("positive2");
 
@@ -42,6 +41,6 @@ public class ChainLengthIncreaseTest extends AbstractOperatorRestoreTestBase {
 
 	@Override
 	protected String getSavepointName() {
-		return "savepoint-688e80-7dd67df6a924";
+		return "chainLength";
 	}
 }

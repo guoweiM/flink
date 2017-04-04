@@ -29,12 +29,6 @@ public class ChainOrderTest extends AbstractOperatorRestoreTestBase {
 
 	@Override
 	protected void createOperators(DataStream<Integer> source) {
-		// reverting the map operations should cause the job to succeed
-		//SingleOutputStreamOperator<Integer> positiveMap = Utils.createPositiveMap(source, restored);
-		//positiveMap.startNewChain();
-		//
-		//SingleOutputStreamOperator<Integer> negativeMap = Utils.createNegativeMap(positiveMap, restored);
-
 		SingleOutputStreamOperator<Integer> negativeMap = Utils.createNegativeMap(source, true);
 		negativeMap.startNewChain();
 
@@ -43,6 +37,6 @@ public class ChainOrderTest extends AbstractOperatorRestoreTestBase {
 
 	@Override
 	protected String getSavepointName() {
-		return "savepoint-543228-909223cd2b5e";
+		return "chainOrder";
 	}
 }

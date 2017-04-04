@@ -33,12 +33,10 @@ public class ChainUnionTest extends AbstractOperatorRestoreTestBase {
 		positiveMap.startNewChain();
 
 		SingleOutputStreamOperator<Integer> negativeMap = Utils.createNegativeMap(positiveMap, true);
-		// uncommenting the following line should cause the job to succeed
-		//negativeMap.startNewChain();
 	}
 
 	@Override
 	protected String getSavepointName() {
-		return "savepoint-d582e6-590b8533be57";
+		return "chainUnion";
 	}
 }
