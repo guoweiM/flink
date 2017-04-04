@@ -21,6 +21,8 @@ package org.apache.flink.runtime.checkpoint.savepoint;
 import org.apache.flink.core.memory.ByteArrayOutputStreamWithPos;
 import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
+import org.apache.flink.migration.runtime.checkpoint.savepoint.SavepointV1;
+import org.apache.flink.migration.runtime.checkpoint.savepoint.SavepointV1Serializer;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
