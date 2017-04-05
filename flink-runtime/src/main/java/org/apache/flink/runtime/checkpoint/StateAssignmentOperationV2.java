@@ -65,61 +65,71 @@ public class StateAssignmentOperationV2 {
 		for (Map.Entry<JobVertexID, ExecutionJobVertex> task : localTasks.entrySet()) {
 			final ExecutionJobVertex executionJobVertex = task.getValue();
 
-			boolean restoreRequired = false;
 			// find the states of all operators belonging to this task
 			JobVertexID[] operatorIDs = executionJobVertex.getOperatorIDs();
 			List<TaskState> operatorStates = new ArrayList<>();
 			for (JobVertexID operatorID : operatorIDs) {
 				TaskState operatorState = taskStates.get(operatorID);
-				restoreRequired |= operatorState != null;
+				if (operatorState == null) {
+					operatorState = new TaskState(
+						operatorID,
+						executionJobVertex.getParallelism(),
+						executionJobVertex.getMaxParallelism(),
+						1);
+				}
 				operatorStates.add(operatorState);
 			}
-			if (restoreRequired) {
-				//TODO: add new restore logic
 
-				// this is a simplified version to verify that the changes so far are correct
-				// this will only work for non-keyed state without any parallelism change
-				for (int subTaskIdx = 0; subTaskIdx < task.getValue().getParallelism(); subTaskIdx++) {
-					Execution currentExecutionAttempt = executionJobVertex
-						.getTaskVertices()[subTaskIdx]
-						.getCurrentExecutionAttempt();
+			//TODO: add new restore logic
 
-					List<StreamStateHandle> nonPartitionableState = new ArrayList<>();
-					List<Collection<OperatorStateHandle>> operatorStateFromBackend = new ArrayList<>();
-					List<Collection<OperatorStateHandle>> operatorStateFromStream = new ArrayList<>();
-					KeyedStateHandle newKeyedStatesBackend = null;
-					KeyedStateHandle newKeyedStateStream = null;
-					// we have to reverse here since the Streaming API stores state in reverse order
-					for (int x = operatorStates.size() - 1; x >= 0; x--) {
-						TaskState operatorState = operatorStates.get(x);
-						if (operatorState != null) {
-							SubtaskState subtaskOperatorState = operatorState.getState(subTaskIdx);
-							if (subtaskOperatorState != null) {
-								if (x == 0) {
-									newKeyedStatesBackend = subtaskOperatorState.getManagedKeyedState();
-									newKeyedStateStream = subtaskOperatorState.getRawKeyedState();
-								}
-								ChainedStateHandle<StreamStateHandle> legacyOperatorState = subtaskOperatorState.getLegacyOperatorState();
-								nonPartitionableState.add(legacyOperatorState != null ? legacyOperatorState.get(0) : null);
+			// this is a simplified version to verify that the changes so far are correct
+			// this will only work for non-keyed state without any parallelism change
+			for (int subTaskIdx = 0; subTaskIdx < task.getValue().getParallelism(); subTaskIdx++) {
+				Execution currentExecutionAttempt = executionJobVertex
+					.getTaskVertices()[subTaskIdx]
+					.getCurrentExecutionAttempt();
 
-								ChainedStateHandle<OperatorStateHandle> managedOperatorState = subtaskOperatorState.getManagedOperatorState();
-								operatorStateFromBackend.add(Collections.singletonList(managedOperatorState != null ? managedOperatorState.get(0) : null));
-
-								ChainedStateHandle<OperatorStateHandle> rawOperatorState = subtaskOperatorState.getRawOperatorState();
-								operatorStateFromStream.add(Collections.singletonList(rawOperatorState != null ? rawOperatorState.get(0) : null));
-							}
-						}
+				List<StreamStateHandle> nonPartitionableState = new ArrayList<>();
+				List<Collection<OperatorStateHandle>> operatorStateFromBackend = new ArrayList<>();
+				List<Collection<OperatorStateHandle>> operatorStateFromStream = new ArrayList<>();
+				KeyedStateHandle newKeyedStatesBackend = null;
+				KeyedStateHandle newKeyedStateStream = null;
+				// we have to reverse here since the Streaming API stores state in reverse order
+				for (int x = operatorStates.size() - 1; x >= 0; x--) {
+					TaskState operatorState = operatorStates.get(x);
+					SubtaskState subtaskOperatorState = operatorState.getState(subTaskIdx);
+					if (subtaskOperatorState == null) {
+						subtaskOperatorState = new SubtaskState(
+							new ChainedStateHandle<>(
+								Collections.<StreamStateHandle>emptyList()),
+								null,
+								null,
+								null,
+								null);
 					}
 
-					TaskStateHandles taskStateHandles = new TaskStateHandles(
-						new ChainedStateHandle<>(nonPartitionableState),
-						operatorStateFromBackend,
-						operatorStateFromStream,
-						Collections.singletonList(newKeyedStatesBackend),
-						Collections.singletonList(newKeyedStateStream));
+					if (x == 0) {
+						newKeyedStatesBackend = subtaskOperatorState.getManagedKeyedState();
+						newKeyedStateStream = subtaskOperatorState.getRawKeyedState();
+					}
+					ChainedStateHandle<StreamStateHandle> legacyOperatorState = subtaskOperatorState.getLegacyOperatorState();
+					nonPartitionableState.add(legacyOperatorState.getLength() > 0 ? legacyOperatorState.get(0) : null);
 
-					currentExecutionAttempt.setInitialState(taskStateHandles);
+					ChainedStateHandle<OperatorStateHandle> managedOperatorState = subtaskOperatorState.getManagedOperatorState();
+					operatorStateFromBackend.add(Collections.singletonList(managedOperatorState != null ? managedOperatorState.get(0) : null));
+
+					ChainedStateHandle<OperatorStateHandle> rawOperatorState = subtaskOperatorState.getRawOperatorState();
+					operatorStateFromStream.add(Collections.singletonList(rawOperatorState != null ? rawOperatorState.get(0) : null));
 				}
+
+				TaskStateHandles taskStateHandles = new TaskStateHandles(
+					new ChainedStateHandle<>(nonPartitionableState),
+					operatorStateFromBackend,
+					operatorStateFromStream,
+					Collections.singletonList(newKeyedStatesBackend),
+					Collections.singletonList(newKeyedStateStream));
+
+				currentExecutionAttempt.setInitialState(taskStateHandles);
 			}
 		}
 
