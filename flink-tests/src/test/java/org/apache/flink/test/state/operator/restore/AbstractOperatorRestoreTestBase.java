@@ -31,7 +31,16 @@ import java.net.URL;
 
 public abstract class AbstractOperatorRestoreTestBase {
 	@Test
-	public void testRestore() throws Exception {
+	public void testRestore_1_2() throws Exception {
+		testRestore("1.2_to_1.3");
+	}
+
+	@Test
+	public void testRestore_1_3() throws Exception {
+		testRestore("1.3");
+	}
+
+	private void testRestore(String flinkVersion) throws Exception {
 		LocalStreamEnvironment env = (LocalStreamEnvironment) StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(new Configuration());
 		env.enableCheckpointing(500, CheckpointingMode.EXACTLY_ONCE);
 		env.setRestartStrategy(RestartStrategies.noRestart());
@@ -40,13 +49,14 @@ public abstract class AbstractOperatorRestoreTestBase {
 
 		createOperators(source);
 
-		URL savepointResource = AbstractOperatorRestoreTestBase.class.getClassLoader().getResource("operatorstate/" + getSavepointName());
+		URL savepointResource = AbstractOperatorRestoreTestBase.class.getClassLoader().getResource("operatorstate/" + getSavepointName() + "/" + flinkVersion);
 		if (savepointResource == null) {
 			throw new IllegalArgumentException("Savepoint file does not exist.");
 		}
-		SavepointRestoreSettings restoreSettings = SavepointRestoreSettings.forPath(savepointResource.getFile());
+		SavepointRestoreSettings restoreSettings = SavepointRestoreSettings.forPath(savepointResource.getFile(), true);
 
 		env.execute("jobRestored", restoreSettings);
+
 	}
 
 	protected abstract void createOperators(DataStream<Integer> source);
