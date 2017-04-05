@@ -17,6 +17,7 @@
  */
 package org.apache.flink.test.state.operator.restore.util;
 
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -80,6 +81,12 @@ public class Utils {
 		return negativeMap;
 	}
 
+	public static SingleOutputStreamOperator<Integer> createNoOpMap(DataStream<Integer> input) {
+		SingleOutputStreamOperator<Integer> noOpMap = input.map(new NoOpMapFunction());
+		noOpMap.setParallelism(4);
+		noOpMap.uid("noOp");
+		return noOpMap;
+	}
 
 	private abstract static class CountingStatefulMap extends RichMapFunction<Integer, Integer> implements CheckpointedFunction {
 
@@ -139,6 +146,16 @@ public class Utils {
 
 		public NegativeStatefulMap(boolean restored) {
 			super(restored, -1);
+		}
+	}
+
+	private static class NoOpMapFunction implements MapFunction<Integer, Integer> {
+
+		private static final long serialVersionUID = 6584823409744624276L;
+
+		@Override
+		public Integer map(Integer value) throws Exception {
+			return value;
 		}
 	}
 }

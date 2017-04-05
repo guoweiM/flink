@@ -33,10 +33,9 @@ public class ChainLengthIncreaseTest extends AbstractOperatorRestoreTestBase {
 		SingleOutputStreamOperator<Integer> positiveMap = Utils.createPositiveMap(source, true);
 		positiveMap.startNewChain();
 
-		SingleOutputStreamOperator<Integer> positiveMap2 = Utils.createPositiveMap(positiveMap, true);
-		positiveMap2.uid("positive2");
+		SingleOutputStreamOperator<Integer> noOpMap = Utils.createNoOpMap(positiveMap);
 
-		SingleOutputStreamOperator<Integer> negativeMap = Utils.createNegativeMap(positiveMap2, true);
+		SingleOutputStreamOperator<Integer> negativeMap = Utils.createNegativeMap(noOpMap, true);
 	}
 
 	@Override
