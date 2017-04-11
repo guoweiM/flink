@@ -127,6 +127,7 @@ public class JobVertex implements java.io.Serializable {
 	public JobVertex(String name, JobVertexID id) {
 		this.name = name == null ? DEFAULT_NAME : name;
 		this.id = id == null ? new JobVertexID() : id;
+		this.operatorIDs.add(this.id);
 	}
 
 	/**
