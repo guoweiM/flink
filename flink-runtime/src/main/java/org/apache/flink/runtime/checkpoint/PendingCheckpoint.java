@@ -394,7 +394,7 @@ public class PendingCheckpoint {
 
 					KeyedStateHandle managedKeyedState = null;
 					KeyedStateHandle rawKeyedState = null;
-					if (x == 0) {
+					if (x == operatorIDs.length - 1) {
 						managedKeyedState = subtaskState.getManagedKeyedState();
 						rawKeyedState = subtaskState.getRawKeyedState();
 					}
