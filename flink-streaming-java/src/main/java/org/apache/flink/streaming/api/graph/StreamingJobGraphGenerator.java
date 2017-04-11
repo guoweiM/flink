@@ -212,16 +212,8 @@ public class StreamingJobGraphGenerator {
 					nonChainableOutputs.add(outEdge);
 				}
 			}
-
-			List<byte[]> operatorHashes = chainedOperatorHashes.get(startNodeId);
-			if (operatorHashes == null) {
-				operatorHashes = new ArrayList<>();
-				chainedOperatorHashes.put(startNodeId, operatorHashes);
-				operatorHashes.add(hashes.get(startNodeId));
-			}
 			
 			for (StreamEdge chainable : chainableOutputs) {
-				operatorHashes.add(hashes.get(chainable.getTargetId()));
 				transitiveOutEdges.addAll(
 						createChain(startNodeId, chainable.getTargetId(), hashes, legacyHashes, chainIndex + 1, chainedOperatorHashes));
 			}
@@ -230,6 +222,13 @@ public class StreamingJobGraphGenerator {
 				transitiveOutEdges.add(nonChainable);
 				createChain(nonChainable.getTargetId(), nonChainable.getTargetId(), hashes, legacyHashes, 0, chainedOperatorHashes);
 			}
+
+			List<byte[]> operatorHashes = chainedOperatorHashes.get(startNodeId);
+			if (operatorHashes == null) {
+				operatorHashes = new ArrayList<>();
+				chainedOperatorHashes.put(startNodeId, operatorHashes);
+			}
+			operatorHashes.add(hashes.get(currentNodeId));
 
 			chainedNames.put(currentNodeId, createChainedName(currentNodeId, chainableOutputs));
 			chainedMinResources.put(currentNodeId, createChainedMinResources(currentNodeId, chainableOutputs));

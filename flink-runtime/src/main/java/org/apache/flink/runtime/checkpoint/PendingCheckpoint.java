@@ -398,12 +398,11 @@ public class PendingCheckpoint {
 						managedKeyedState = subtaskState.getManagedKeyedState();
 						rawKeyedState = subtaskState.getRawKeyedState();
 					}
-					// we have to reverse the index here since the streaming API stores the state in reverse order
-					int adjustedIndex = operatorIDs.length - 1 - x;
+
 					SubtaskState operatorSubtaskState = new SubtaskState(
-						new ChainedStateHandle<>(Collections.singletonList(nonPartitionedState.get(adjustedIndex))),
-						new ChainedStateHandle<>(Collections.singletonList(partitioneableState.get(adjustedIndex))),
-						new ChainedStateHandle<>(Collections.singletonList(rawOperatorState.get(adjustedIndex))),
+						new ChainedStateHandle<>(Collections.singletonList(nonPartitionedState.get(x))),
+						new ChainedStateHandle<>(Collections.singletonList(partitioneableState.get(x))),
+						new ChainedStateHandle<>(Collections.singletonList(rawOperatorState.get(x))),
 						managedKeyedState,
 						rawKeyedState);
 

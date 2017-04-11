@@ -94,8 +94,8 @@ public class StateAssignmentOperationV2 {
 				List<Collection<OperatorStateHandle>> operatorStateFromStream = new ArrayList<>();
 				KeyedStateHandle newKeyedStatesBackend = null;
 				KeyedStateHandle newKeyedStateStream = null;
-				// we have to reverse here since the Streaming API stores state in reverse order
-				for (int x = operatorStates.size() - 1; x >= 0; x--) {
+
+				for (int x = 0; x < operatorStates.size(); x++) {
 					TaskState operatorState = operatorStates.get(x);
 					SubtaskState subtaskOperatorState = operatorState.getState(subTaskIdx);
 					if (subtaskOperatorState == null) {
