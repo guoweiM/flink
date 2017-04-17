@@ -364,7 +364,7 @@ public class StateAssignmentOperation {
 		}
 	}
 
-	private static List<Collection<OperatorStateHandle>> applyRepartitioner(
+	public static List<Collection<OperatorStateHandle>> applyRepartitioner(
 			OperatorStateRepartitioner opStateRepartitioner,
 			List<OperatorStateHandle> chainOpParallelStates,
 			int oldParallelism,

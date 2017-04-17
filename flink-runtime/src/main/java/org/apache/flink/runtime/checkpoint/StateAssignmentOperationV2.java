@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -135,4 +136,105 @@ public class StateAssignmentOperationV2 {
 
 		return true;
 	}
+
+	
+
+
+	private void repartitionOperatorState(ExecutionJobVertex executionJobVertex,
+		Map<JobVertexID, List<OperatorStateHandle>> allOpStates,
+		OperatorStateRepartitioner opStateRepartitioner){
+
+		Map<JobVertexID, List<Collection<OperatorStateHandle>>> repartitionedOpStates = new HashMap<>();
+
+		int newParallelism = executionJobVertex.getParallelism();
+
+		JobVertexID[] operatorIDs = executionJobVertex.getOperatorIDs();
+
+		for(JobVertexID operatorID : operatorIDs){
+			List<OperatorStateHandle> operatorStates = allOpStates.get(operatorID);
+			int oldParallelism = allOpStates.get(operatorID).size();
+
+			repartitionedOpStates.put(operatorID,
+				StateAssignmentOperation.applyRepartitioner(opStateRepartitioner,
+					operatorStates, oldParallelism, newParallelism));
+		}
+
+	}
+
+
+	/**
+	 * This method collects states which is needed by the {@param executionJobVertex}.
+	 * All the states which are needed by {@param executionJobVertex} are stored to five different maps according to the
+	 * state type.
+	 *
+	 * @param executionJobVertex      the vertex which is needed to collect states.
+	 *
+	 * @param allLegacyOperatorStates all the legacy states needed by {@param executionJobVertex}
+	 * @param allOpStatesBackend      all the managed operator states needed by {@param executionJobVertex}
+	 * @param allOpStatesStream       all the raw operator states needed by {@param executionJobVertex}
+	 * @param allKeyedStatesBackend   all the managed keyed states needed by {@param executionJobVertex}
+	 * @param allKeyedStatesStream    all the raw keyed states needed by {@param executionJobVertex}
+	 */
+
+	private void collectStates(ExecutionJobVertex executionJobVertex,
+		Map<JobVertexID, List<StreamStateHandle>> allLegacyOperatorStates,
+		Map<JobVertexID, List<OperatorStateHandle>> allOpStatesBackend,
+		Map<JobVertexID, List<OperatorStateHandle>> allOpStatesStream,
+		Map<JobVertexID, List<KeyedStateHandle>> allKeyedStatesBackend,
+		Map<JobVertexID, List<KeyedStateHandle>> allKeyedStatesStream){
+
+		JobVertexID[] operatorIDs = executionJobVertex.getOperatorIDs();
+
+		for(JobVertexID operatorID : operatorIDs){
+			//find the operator state
+			TaskState operatorState = this.taskStates.get(operatorID);
+
+			if (operatorState != null){
+				List<StreamStateHandle> legacyOperatorStates = new ArrayList<>();
+
+				List<OperatorStateHandle> opStatesBackend = new ArrayList<>();
+				List<OperatorStateHandle> opStatesStream = new ArrayList<>();
+
+				List<KeyedStateHandle> keyedStatesBackend = new ArrayList<>();
+				List<KeyedStateHandle> keyedStatesStream = new ArrayList<>();
+
+				allLegacyOperatorStates.put(operatorID, legacyOperatorStates);
+
+				allOpStatesBackend.put(operatorID, opStatesBackend);
+				allOpStatesStream.put(operatorID, opStatesStream);
+
+				allKeyedStatesBackend.put(operatorID, keyedStatesBackend);
+				allKeyedStatesStream.put(operatorID, keyedStatesStream);
+
+				for(int i = 0; i < operatorState.getParallelism(); i++){
+					SubtaskState subtaskState = operatorState.getState(i);
+					legacyOperatorStates.add(subtaskState.getLegacyOperatorState().get(0));
+
+					if (subtaskState.getManagedOperatorState() != null && subtaskState.getManagedOperatorState().getLength() != 0){
+						if (subtaskState.getManagedOperatorState().getLength() == 1){
+							opStatesBackend.add(subtaskState.getManagedOperatorState().get(0));
+						}else{
+							throw new IllegalStateException("("+operatorID+") Length of the managed operator states is more than 1");
+						}
+					}else{
+						opStatesBackend.add(null);
+					}
+
+					if (subtaskState.getRawKeyedState() != null && subtaskState.getRawOperatorState().getLength() != 0){
+						if (subtaskState.getRawOperatorState().getLength() == 1){
+							opStatesStream.add(subtaskState.getRawOperatorState().get(0));
+						}else{
+							throw new IllegalStateException("("+operatorID+") Length of the raw operator states is more than 1");
+						}
+					}else{
+						opStatesStream.add(null);
+					}
+					keyedStatesBackend.add(subtaskState.getManagedKeyedState());
+					keyedStatesStream.add(subtaskState.getRawKeyedState());
+				}
+			}
+		}
+	}
+
+
 }
