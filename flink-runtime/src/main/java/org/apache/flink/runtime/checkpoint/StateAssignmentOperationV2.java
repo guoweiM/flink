@@ -22,11 +22,7 @@ import org.apache.flink.migration.runtime.checkpoint.StateAssignmentOperation;
 import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
-import org.apache.flink.runtime.state.ChainedStateHandle;
-import org.apache.flink.runtime.state.KeyedStateHandle;
-import org.apache.flink.runtime.state.OperatorStateHandle;
-import org.apache.flink.runtime.state.StreamStateHandle;
-import org.apache.flink.runtime.state.TaskStateHandles;
+import org.apache.flink.runtime.state.*;
 import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 
@@ -140,7 +136,7 @@ public class StateAssignmentOperationV2 {
 	
 
 
-	private void repartitionOperatorState(ExecutionJobVertex executionJobVertex,
+	private Map<JobVertexID, List<Collection<OperatorStateHandle>>> repartitionOperatorStates(ExecutionJobVertex executionJobVertex,
 		Map<JobVertexID, List<OperatorStateHandle>> allOpStates,
 		OperatorStateRepartitioner opStateRepartitioner){
 
@@ -159,6 +155,52 @@ public class StateAssignmentOperationV2 {
 					operatorStates, oldParallelism, newParallelism));
 		}
 
+		return repartitionedOpStates;
+
+	}
+
+	private void repartitionKeyedStates(ExecutionJobVertex executionJobVertex,
+		List<KeyedStateHandle> keyedStatesBackend,
+		List<KeyedStateHandle> keyedStatesStream,
+		List<Collection<KeyedStateHandle>> newKeyedStatesBackend,
+		List<Collection<KeyedStateHandle>> newKeyedStatesStream){
+
+		int newParallelism = executionJobVertex.getParallelism();
+		int oldParallelism;
+
+		if (keyedStatesBackend == null && keyedStatesStream == null){
+			return;
+		}
+
+		if (keyedStatesBackend != null && keyedStatesStream != null){
+			if (keyedStatesBackend.size() != keyedStatesStream.size()){
+				throw new IllegalArgumentException("The number of keyedStatesBackend(" +
+					+ keyedStatesBackend.size()+ ") is different with the number of keyedStatesStream(" +
+					+ keyedStatesStream.size());
+			}
+		}
+		if (keyedStatesBackend != null){
+			oldParallelism = keyedStatesBackend.size();
+		}else{
+			oldParallelism = keyedStatesStream.size();
+		}
+
+		if (newParallelism == oldParallelism){
+			for(int i=0; i < newParallelism; i++) {
+				KeyedStateHandle keyedState = keyedStatesBackend != null ? keyedStatesBackend.get(i) : null;
+				KeyedStateHandle keyedStream = keyedStatesStream != null ? keyedStatesStream.get(i) : null;
+
+				newKeyedStatesBackend.add(keyedState == null ? null : Collections.singletonList(keyedState));
+				newKeyedStatesStream.add(keyedStream == null ? null : Collections.singletonList(keyedStream));
+			}
+		}else{
+			List<KeyGroupRange> keyGroupPartitions = StateAssignmentOperation.createKeyGroupPartitions(
+				executionJobVertex.getMaxParallelism(),
+				newParallelism);
+
+			for(int i = 0; i < newParallelism; i++){
+			}
+		}
 	}
 
 
