@@ -81,6 +81,7 @@ public class StateAssignmentOperationV2 {
 						executionJobVertex.getMaxParallelism(),
 						1);
 				}
+				//TODO:: check operatorState chainLength is 1
 				operatorStates.add(operatorState);
 			}
 
@@ -92,8 +93,7 @@ public class StateAssignmentOperationV2 {
 
 
 
-	private void assignAttemptState(ExecutionJobVertex executionJobVertex,
-		List<TaskState> operatorStates){
+	private void assignAttemptState(ExecutionJobVertex executionJobVertex, List<TaskState> operatorStates){
 
 		//TODO:: check the sequence of the operator ids.
 		JobVertexID[] operatorIDs = executionJobVertex.getOperatorIDs();
@@ -104,13 +104,37 @@ public class StateAssignmentOperationV2 {
 			executionJobVertex.getMaxParallelism(),
 			newParallelism);
 
+		/**
+		 *
+		 * ReDistribute ManagedOperatorStates and RawOperatorStates from old parallelism to new parallelism.
+		 *
+		 * The old ManagedOperatorStates with old parallelism 3:
+		 *
+		 * 		parallelism0 parallelism1 parallelism2
+		 * op0   states0,0    state0,1	   state0,2
+		 * op1
+		 * op2   states2,0    state2,1	   state1,2
+		 * op3   states3,0    state3,1     state3,2
+		 *
+		 * The new ManagedOperatorStates with new parallelism 4:
+		 *
+		 * 		parallelism0 parallelism1 parallelism2 parallelism3
+		 * op0   state0,0	  state0,1 	   state0,2		state0,3
+		 * op1
+		 * op2   state2,0	  state2,1 	   state2,2		state2,3
+		 * op3   state3,0	  state3,1 	   state3,2		state3,3
+		 */
 		List<List<Collection<OperatorStateHandle>>> newManagedOperatorStates = new ArrayList<>();
 		List<List<Collection<OperatorStateHandle>>> newRawOperatorStates = new ArrayList<>();
 
 		reDistributePartitionableStates(operatorStates, newParallelism, newManagedOperatorStates, newRawOperatorStates);
 
 
+		// compute the state by task
 		for(int subTaskIndex = 0; subTaskIndex < newParallelism; subTaskIndex++) {
+
+			Execution currentExecutionAttempt = executionJobVertex.getTaskVertices()[subTaskIndex]
+				.getCurrentExecutionAttempt();
 
 			List<StreamStateHandle> subNonPartitionableState = new ArrayList<>();
 
@@ -119,8 +143,7 @@ public class StateAssignmentOperationV2 {
 			List<Collection<OperatorStateHandle>> subManagedOperatorState = new ArrayList<>();
 			List<Collection<OperatorStateHandle>> subRawOperatorState = new ArrayList<>();
 
-			Execution currentExecutionAttempt = executionJobVertex.getTaskVertices()[subTaskIndex]
-				.getCurrentExecutionAttempt();
+
 
 			for(int operatorIndex = 0; operatorIndex < operatorIDs.length; operatorIndex++) {
 				//TODO:: check operatorState chain is 1 before this method
@@ -161,68 +184,9 @@ public class StateAssignmentOperationV2 {
 				subKeyedState != null ? subKeyedState.f1 : null);
 
 			currentExecutionAttempt.setInitialState(taskStateHandles);
-
 		}
-
-
 	}
 
-	/**
-	 * Collect {@link KeyGroupsStateHandle  managedKeyedStateHandles} which have intersection with given
-	 * {@link KeyGroupRange} from {@link TaskState operatorState}
-	 *
-	 * @param operatorState all state handles of a operator
-	 * @param subtaskKeyGroupRange the KeyGroupRange of a subtask
-	 *
-	 * @return all managedKeyedStateHandles which have intersection with given KeyGroupRange
-	 *
-	 */
-	public static List<KeyedStateHandle> getManagedKeyedStateHandles(
-		TaskState operatorState,
-		KeyGroupRange subtaskKeyGroupRange) {
-
-		List<KeyedStateHandle> subtaskKeyedStateHandles = new ArrayList<>();
-
-		for (int i = 0; i < operatorState.getParallelism(); i++) {
-			if (operatorState.getState(i) != null && operatorState.getState(i).getManagedKeyedState() != null) {
-				KeyedStateHandle intersectedKeyedStateHandle = operatorState.getState(i).getManagedKeyedState().getIntersection(subtaskKeyGroupRange);
-
-				if (intersectedKeyedStateHandle != null) {
-					subtaskKeyedStateHandles.add(intersectedKeyedStateHandle);
-				}
-			}
-		}
-
-		return subtaskKeyedStateHandles;
-	}
-
-	/**
-	 * Collect {@link KeyGroupsStateHandle  rawKeyedStateHandles} which have intersection with given
-	 * {@link KeyGroupRange} from {@link TaskState operatorState}
-	 *
-	 * @param operatorState all state handles of a operator
-	 * @param subtaskKeyGroupRange the KeyGroupRange of a subtask
-	 *
-	 * @return all rawKeyedStateHandles which have intersection with given KeyGroupRange
-	 */
-	public static List<KeyedStateHandle> getRawKeyedStateHandles(
-		TaskState operatorState,
-		KeyGroupRange subtaskKeyGroupRange) {
-
-		List<KeyedStateHandle> subtaskKeyedStateHandles = new ArrayList<>();
-
-		for (int i = 0; i < operatorState.getParallelism(); i++) {
-			if (operatorState.getState(i) != null && operatorState.getState(i).getRawKeyedState() != null) {
-				KeyedStateHandle intersectedKeyedStateHandle = operatorState.getState(i).getRawKeyedState().getIntersection(subtaskKeyGroupRange);
-
-				if (intersectedKeyedStateHandle != null) {
-					subtaskKeyedStateHandles.add(intersectedKeyedStateHandle);
-				}
-			}
-		}
-
-		return subtaskKeyedStateHandles;
-	}
 
 
 
@@ -341,6 +305,64 @@ public class StateAssignmentOperationV2 {
 
 			}
 		}
+	}
+
+
+	/**
+	 * Collect {@link KeyGroupsStateHandle  managedKeyedStateHandles} which have intersection with given
+	 * {@link KeyGroupRange} from {@link TaskState operatorState}
+	 *
+	 * @param operatorState all state handles of a operator
+	 * @param subtaskKeyGroupRange the KeyGroupRange of a subtask
+	 *
+	 * @return all managedKeyedStateHandles which have intersection with given KeyGroupRange
+	 *
+	 */
+	public static List<KeyedStateHandle> getManagedKeyedStateHandles(
+		TaskState operatorState,
+		KeyGroupRange subtaskKeyGroupRange) {
+
+		List<KeyedStateHandle> subtaskKeyedStateHandles = new ArrayList<>();
+
+		for (int i = 0; i < operatorState.getParallelism(); i++) {
+			if (operatorState.getState(i) != null && operatorState.getState(i).getManagedKeyedState() != null) {
+				KeyedStateHandle intersectedKeyedStateHandle = operatorState.getState(i).getManagedKeyedState().getIntersection(subtaskKeyGroupRange);
+
+				if (intersectedKeyedStateHandle != null) {
+					subtaskKeyedStateHandles.add(intersectedKeyedStateHandle);
+				}
+			}
+		}
+
+		return subtaskKeyedStateHandles;
+	}
+
+	/**
+	 * Collect {@link KeyGroupsStateHandle  rawKeyedStateHandles} which have intersection with given
+	 * {@link KeyGroupRange} from {@link TaskState operatorState}
+	 *
+	 * @param operatorState all state handles of a operator
+	 * @param subtaskKeyGroupRange the KeyGroupRange of a subtask
+	 *
+	 * @return all rawKeyedStateHandles which have intersection with given KeyGroupRange
+	 */
+	public static List<KeyedStateHandle> getRawKeyedStateHandles(
+		TaskState operatorState,
+		KeyGroupRange subtaskKeyGroupRange) {
+
+		List<KeyedStateHandle> subtaskKeyedStateHandles = new ArrayList<>();
+
+		for (int i = 0; i < operatorState.getParallelism(); i++) {
+			if (operatorState.getState(i) != null && operatorState.getState(i).getRawKeyedState() != null) {
+				KeyedStateHandle intersectedKeyedStateHandle = operatorState.getState(i).getRawKeyedState().getIntersection(subtaskKeyGroupRange);
+
+				if (intersectedKeyedStateHandle != null) {
+					subtaskKeyedStateHandles.add(intersectedKeyedStateHandle);
+				}
+			}
+		}
+
+		return subtaskKeyedStateHandles;
 	}
 
 
