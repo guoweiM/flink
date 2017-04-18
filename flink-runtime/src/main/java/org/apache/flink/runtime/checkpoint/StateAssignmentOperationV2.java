@@ -137,7 +137,7 @@ public class StateAssignmentOperationV2 {
 		return true;
 	}
 
-	
+
 
 
 	private void repartitionOperatorState(ExecutionJobVertex executionJobVertex,
@@ -158,8 +158,9 @@ public class StateAssignmentOperationV2 {
 				StateAssignmentOperation.applyRepartitioner(opStateRepartitioner,
 					operatorStates, oldParallelism, newParallelism));
 		}
-
 	}
+
+
 
 
 	/**
