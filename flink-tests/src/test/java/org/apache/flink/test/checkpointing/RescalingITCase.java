@@ -57,7 +57,6 @@ import org.apache.flink.util.TestLogger;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import scala.Option;
@@ -124,25 +123,21 @@ public class RescalingITCase extends TestLogger {
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingInKeyedState() throws Exception {
 		testSavepointRescalingKeyedState(false, false);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingOutKeyedState() throws Exception {
 		testSavepointRescalingKeyedState(true, false);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingInKeyedStateDerivedMaxParallelism() throws Exception {
 		testSavepointRescalingKeyedState(false, true);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingOutKeyedStateDerivedMaxParallelism() throws Exception {
 		testSavepointRescalingKeyedState(true, true);
 	}
@@ -259,7 +254,6 @@ public class RescalingITCase extends TestLogger {
 	 * @throws Exception
 	 */
 	@Test
-	@Ignore
 	public void testSavepointRescalingNonPartitionedStateCausesException() throws Exception {
 		final int parallelism = numSlots / 2;
 		final int parallelism2 = numSlots;
@@ -345,7 +339,6 @@ public class RescalingITCase extends TestLogger {
 	 * @throws Exception
 	 */
 	@Test
-	@Ignore
 	public void testSavepointRescalingWithKeyedAndNonPartitionedState() throws Exception {
 		int numberKeys = 42;
 		int numberElements = 1000;
@@ -459,37 +452,31 @@ public class RescalingITCase extends TestLogger {
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingInPartitionedOperatorState() throws Exception {
 		testSavepointRescalingPartitionedOperatorState(false, OperatorCheckpointMethod.CHECKPOINTED_FUNCTION);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingOutPartitionedOperatorState() throws Exception {
 		testSavepointRescalingPartitionedOperatorState(true, OperatorCheckpointMethod.CHECKPOINTED_FUNCTION);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingInBroadcastOperatorState() throws Exception {
 		testSavepointRescalingPartitionedOperatorState(false, OperatorCheckpointMethod.CHECKPOINTED_FUNCTION_BROADCAST);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingOutBroadcastOperatorState() throws Exception {
 		testSavepointRescalingPartitionedOperatorState(true, OperatorCheckpointMethod.CHECKPOINTED_FUNCTION_BROADCAST);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingInPartitionedOperatorStateList() throws Exception {
 		testSavepointRescalingPartitionedOperatorState(false, OperatorCheckpointMethod.LIST_CHECKPOINTED);
 	}
 
 	@Test
-	@Ignore
 	public void testSavepointRescalingOutPartitionedOperatorStateList() throws Exception {
 		testSavepointRescalingPartitionedOperatorState(true, OperatorCheckpointMethod.LIST_CHECKPOINTED);
 	}

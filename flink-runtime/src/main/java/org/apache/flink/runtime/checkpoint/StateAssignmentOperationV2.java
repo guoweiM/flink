@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -197,8 +196,17 @@ public class StateAssignmentOperationV2 {
 		List<Collection<OperatorStateHandle>> subManagedOperatorState,
 		List<Collection<OperatorStateHandle>> subRawOperatorState){
 
-		subManagedOperatorState.add(newMangedOperatorStates.get(operatorIndex).get(subTaskIndex));
-		subRawOperatorState.add(newRawOperatorStates.get(operatorIndex).get(subTaskIndex));
+		if (newMangedOperatorStates.get(operatorIndex) != null) {
+			subManagedOperatorState.add(newMangedOperatorStates.get(operatorIndex).get(subTaskIndex));
+		}else{
+			subManagedOperatorState.add(null);
+		}
+		if (newRawOperatorStates.get(operatorIndex) != null) {
+			subRawOperatorState.add(newRawOperatorStates.get(operatorIndex).get(subTaskIndex));
+		}else{
+			subRawOperatorState.add(null);
+		}
+
 
 	}
 
@@ -248,11 +256,12 @@ public class StateAssignmentOperationV2 {
 		if (oldParallelism == newParallelism) {
 			if (operatorState.getState(subTaskIndex) != null &&
 				!operatorState.getState(subTaskIndex).getLegacyOperatorState().isEmpty()) {
-
 				subNonPartitionableState.add(operatorState.getState(subTaskIndex).getLegacyOperatorState().get(0));
 			}else{
 				subNonPartitionableState.add(null);
 			}
+		}else{
+			subNonPartitionableState.add(null);
 		}
 	}
 
@@ -286,24 +295,33 @@ public class StateAssignmentOperationV2 {
 		List<List<OperatorStateHandle>> rawOperatorStates){
 
 		for(TaskState operatorState : operatorStates){
-			List<OperatorStateHandle> managedOperatorState = new ArrayList<>();
-			List<OperatorStateHandle> rawOperatorState = new ArrayList<>();
-
-			managedOperatorStates.add(managedOperatorState);
-			rawOperatorStates.add(rawOperatorState);
+			List<OperatorStateHandle> managedOperatorState =  null;
+			List<OperatorStateHandle> rawOperatorState = null;
 
 			for(int i = 0; i < operatorState.getParallelism(); i++){
 				SubtaskState subtaskState = operatorState.getState(i);
 				if (subtaskState != null){
-					if (subtaskState.getManagedOperatorState() != null && subtaskState.getManagedOperatorState().getLength() > 0){
+					if (subtaskState.getManagedOperatorState() != null &&
+						subtaskState.getManagedOperatorState().getLength() > 0 &&
+						subtaskState.getManagedOperatorState().get(0) != null){
+						if (managedOperatorState == null){
+							managedOperatorState = new ArrayList<>();
+						}
 						managedOperatorState.add(subtaskState.getManagedOperatorState().get(0));
 					}
-					if (subtaskState.getRawKeyedState() != null && subtaskState.getRawOperatorState().getLength() >0){
+					if (subtaskState.getRawKeyedState() != null &&
+						subtaskState.getRawOperatorState().getLength() >0 &&
+						subtaskState.getRawOperatorState().get(0) != null){
+						if (rawOperatorState == null){
+							rawOperatorState = new ArrayList<>();
+						}
 						rawOperatorState.add(subtaskState.getRawOperatorState().get(0));
 					}
 				}
 
 			}
+			managedOperatorStates.add(managedOperatorState);
+			rawOperatorStates.add(rawOperatorState);
 		}
 	}
 
