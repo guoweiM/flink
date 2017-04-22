@@ -186,6 +186,8 @@ public class RescalingITCase extends TestLogger {
 
 			assertEquals(expectedResult, actualResult);
 
+			System.err.println("-------------------------");
+
 			// clear the CollectionSink set for the restarted job
 			CollectionSink.clearElementsSet();
 
@@ -757,10 +759,8 @@ public class RescalingITCase extends TestLogger {
 						for (int value = subtaskIndex;
 						     value < numberKeys;
 						     value += getRuntimeContext().getNumberOfParallelSubtasks()) {
-
 							ctx.collect(value);
 						}
-
 						counter++;
 					}
 				} else {
@@ -812,6 +812,7 @@ public class RescalingITCase extends TestLogger {
 
 		private final int numberElements;
 
+		private boolean isFirst = true;
 		SubtaskIndexFlatMapper(int numberElements) {
 			this.numberElements = numberElements;
 		}
@@ -819,6 +820,11 @@ public class RescalingITCase extends TestLogger {
 		@Override
 		public void flatMap(Integer value, Collector<Tuple2<Integer, Integer>> out) throws Exception {
 
+			if (isFirst) {
+				System.err.println(getRuntimeContext().getIndexOfThisSubtask() + "::" + counter.value() + "::::" + sum.value());
+				isFirst = false;
+
+			}
 			int count = counter.value() + 1;
 			counter.update(count);
 
@@ -840,6 +846,7 @@ public class RescalingITCase extends TestLogger {
 		public void initializeState(FunctionInitializationContext context) throws Exception {
 			counter = context.getKeyedStateStore().getState(new ValueStateDescriptor<>("counter", Integer.class, 0));
 			sum = context.getKeyedStateStore().getState(new ValueStateDescriptor<>("sum", Integer.class, 0));
+
 		}
 	}
 
