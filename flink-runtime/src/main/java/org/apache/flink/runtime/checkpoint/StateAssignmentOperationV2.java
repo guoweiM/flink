@@ -171,19 +171,27 @@ public class StateAssignmentOperationV2 {
 			List<Collection<OperatorStateHandle>> subManagedOperatorState = new ArrayList<>();
 			List<Collection<OperatorStateHandle>> subRawOperatorState = new ArrayList<>();
 
-
+			boolean oldHasNonPartitionState = false;
 
 			for(int operatorIndex = 0; operatorIndex < operatorIDs.length; operatorIndex++) {
 				TaskState operatorState = operatorStates.get(operatorIndex);
 				int oldParallelism = operatorState.getParallelism();
 
 				// NonPartitioned State
-				reassignSubNonPartitionedStates(operatorIDs[operatorIndex],
-					operatorState,
-					subTaskIndex,
-					newParallelism,
-					oldParallelism,
-					subNonPartitionableState);
+				if (oldParallelism == newParallelism) {
+					if (operatorState.getState(subTaskIndex) != null){
+						oldHasNonPartitionState = true;
+						if (!operatorState.getState(subTaskIndex).getLegacyOperatorState().isEmpty()) {
+							subNonPartitionableState.add(operatorState.getState(subTaskIndex).getLegacyOperatorState().get(0));
+						}else{
+							subNonPartitionableState.add(null);
+						}
+					}else{
+						subNonPartitionableState.add(null);
+					}
+				}else{
+					subNonPartitionableState.add(null);
+				}
 
 				// PartitionedState
 				reAssignSubPartitionableState(newManagedOperatorStates,
@@ -203,14 +211,20 @@ public class StateAssignmentOperationV2 {
 				}
 			}
 
+			//if old state has not non partition state
+			//there is no state to restore
+			if (!oldHasNonPartitionState){
+				subNonPartitionableState = null;
+			}
 
-			if (! allElementsAreNull(subNonPartitionableState) ||
+
+			if (subNonPartitionableState != null ||
 				! allElementsAreNull(subManagedOperatorState) ||
 				! allElementsAreNull(subRawOperatorState) ||
 				subKeyedState != null) {
 
 				TaskStateHandles taskStateHandles = new TaskStateHandles(
-					!allElementsAreNull(subNonPartitionableState) ? new ChainedStateHandle<>(subNonPartitionableState) : null,
+					subNonPartitionableState != null ? new ChainedStateHandle<>(subNonPartitionableState) : null,
 					subManagedOperatorState,
 					subRawOperatorState ,
 					subKeyedState != null ? subKeyedState.f0 : null,
@@ -299,14 +313,6 @@ public class StateAssignmentOperationV2 {
 		int oldParallelism,
 		List<StreamStateHandle> subNonPartitionableState){
 
-//		//TODO:: this prediction can be removed
-//		if (operatorState.hasNonPartitionedState() && (oldParallelism != newParallelism)) {
-//			throw new IllegalStateException(
-//				"Cannot restore the latest checkpoint because " + "the operator " + operatorID +
-//					" has non-partitioned " + "state and its parallelism changed. The operator " +
-//					operatorID + " has parallelism " + newParallelism + " whereas the corresponding " +
-//					"state object has a parallelism of " + oldParallelism);
-//		}
 
 		if (oldParallelism == newParallelism) {
 			if (operatorState.getState(subTaskIndex) != null &&
