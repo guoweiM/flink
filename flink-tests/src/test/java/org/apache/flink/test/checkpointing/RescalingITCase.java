@@ -186,7 +186,7 @@ public class RescalingITCase extends TestLogger {
 
 			assertEquals(expectedResult, actualResult);
 
-			System.err.println("-------------------------");
+			System.err.println("-------------------------"+parallelism+":::"+parallelism2);
 
 			// clear the CollectionSink set for the restarted job
 			CollectionSink.clearElementsSet();

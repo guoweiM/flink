@@ -340,13 +340,16 @@ public class StateAssignmentOperationV2 {
 		TaskState operatorState,
 		KeyGroupRange subtaskKeyGroupRange) {
 
-		List<KeyedStateHandle> subtaskKeyedStateHandles = new ArrayList<>();
+		List<KeyedStateHandle> subtaskKeyedStateHandles = null;
 
 		for (int i = 0; i < operatorState.getParallelism(); i++) {
 			if (operatorState.getState(i) != null && operatorState.getState(i).getManagedKeyedState() != null) {
 				KeyedStateHandle intersectedKeyedStateHandle = operatorState.getState(i).getManagedKeyedState().getIntersection(subtaskKeyGroupRange);
 
 				if (intersectedKeyedStateHandle != null) {
+					if (subtaskKeyedStateHandles == null){
+						subtaskKeyedStateHandles = new ArrayList<>();
+					}
 					subtaskKeyedStateHandles.add(intersectedKeyedStateHandle);
 				}
 			}
@@ -368,13 +371,16 @@ public class StateAssignmentOperationV2 {
 		TaskState operatorState,
 		KeyGroupRange subtaskKeyGroupRange) {
 
-		List<KeyedStateHandle> subtaskKeyedStateHandles = new ArrayList<>();
+		List<KeyedStateHandle> subtaskKeyedStateHandles = null;
 
 		for (int i = 0; i < operatorState.getParallelism(); i++) {
 			if (operatorState.getState(i) != null && operatorState.getState(i).getRawKeyedState() != null) {
 				KeyedStateHandle intersectedKeyedStateHandle = operatorState.getState(i).getRawKeyedState().getIntersection(subtaskKeyGroupRange);
 
 				if (intersectedKeyedStateHandle != null) {
+					if (subtaskKeyedStateHandles == null){
+						subtaskKeyedStateHandles = new ArrayList<>();
+					}
 					subtaskKeyedStateHandles.add(intersectedKeyedStateHandle);
 				}
 			}

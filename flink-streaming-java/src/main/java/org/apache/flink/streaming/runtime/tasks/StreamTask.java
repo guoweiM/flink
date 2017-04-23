@@ -747,6 +747,7 @@ public abstract class StreamTask<OUT, OP extends StreamOperator<OUT>>
 			int numberOfKeyGroups,
 			KeyGroupRange keyGroupRange) throws Exception {
 
+
 		if (keyedStateBackend != null) {
 			throw new RuntimeException("The keyed state backend can only be created once.");
 		}
