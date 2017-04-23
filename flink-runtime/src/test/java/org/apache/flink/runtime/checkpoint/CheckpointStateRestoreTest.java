@@ -206,7 +206,6 @@ public class CheckpointStateRestoreTest {
 	 * The flag only applies for state that is part of the checkpoint.
 	 */
 	@Test
-	@Ignore //TODO: can't fail at the moment
 	public void testNonRestoredState() throws Exception {
 		// --- (1) Create tasks to restore checkpoint with ---
 		JobVertexID jobVertexId1 = new JobVertexID();
@@ -259,6 +258,7 @@ public class CheckpointStateRestoreTest {
 
 		coord.getCheckpointStore().addCheckpoint(checkpoint);
 
+		// (ii) Don't allow non restored state (should fail)
 		coord.restoreLatestCheckpointedState(tasks, true, false);
 		coord.restoreLatestCheckpointedState(tasks, true, true);
 

@@ -400,9 +400,9 @@ public class PendingCheckpoint {
 					}
 
 					SubtaskState operatorSubtaskState = new SubtaskState(
-						new ChainedStateHandle<>(Collections.singletonList(nonPartitionedState.get(x))),
-						new ChainedStateHandle<>(Collections.singletonList(partitioneableState.get(x))),
-						new ChainedStateHandle<>(Collections.singletonList(rawOperatorState.get(x))),
+						new ChainedStateHandle<>(Collections.singletonList(nonPartitionedState != null ? nonPartitionedState.get(x) : null)),
+						new ChainedStateHandle<>(Collections.singletonList(partitioneableState != null ? partitioneableState.get(x) : null)),
+						new ChainedStateHandle<>(Collections.singletonList(rawOperatorState != null ? rawOperatorState.get(x) : null)),
 						managedKeyedState,
 						rawKeyedState);
 

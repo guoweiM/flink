@@ -1968,7 +1968,6 @@ public class CheckpointCoordinatorTest {
 	 * @throws Exception
 	 */
 	@Test(expected=IllegalStateException.class)
-	@Ignore
 	public void testRestoreLatestCheckpointFailureWhenMaxParallelismChanges() throws Exception {
 		final JobID jid = new JobID();
 		final long timestamp = System.currentTimeMillis();
@@ -2085,7 +2084,6 @@ public class CheckpointCoordinatorTest {
 	 * @throws Exception
 	 */
 	@Test(expected=IllegalStateException.class)
-	@Ignore
 	public void testRestoreLatestCheckpointFailureWhenParallelismChanges() throws Exception {
 		final JobID jid = new JobID();
 		final long timestamp = System.currentTimeMillis();
@@ -2205,13 +2203,11 @@ public class CheckpointCoordinatorTest {
 	}
 
 	@Test
-	@Ignore
 	public void testRestoreLatestCheckpointedStateScaleIn() throws Exception {
 		testRestoreLatestCheckpointedStateWithChangingParallelism(false);
 	}
 
 	@Test
-	@Ignore
 	public void testRestoreLatestCheckpointedStateScaleOut() throws Exception {
 		testRestoreLatestCheckpointedStateWithChangingParallelism(false);
 	}

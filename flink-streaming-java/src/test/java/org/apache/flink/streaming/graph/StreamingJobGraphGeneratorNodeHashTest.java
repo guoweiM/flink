@@ -394,17 +394,20 @@ public class StreamingJobGraphGeneratorNodeHashTest extends TestLogger {
 	/**
 	 * Tests that a manual hash for an intermediate chain node throws an Exception.
 	 */
-	@Test(expected = UnsupportedOperationException.class)
+	@Test
 	public void testManualHashAssignmentForIntermediateNodeInChainThrowsException() throws Exception {
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
 		env.setParallelism(4);
-
-		env.addSource(new NoOpSourceFunction())
+		try {
+			env.addSource(new NoOpSourceFunction())
 				// Intermediate chained node
 				.map(new NoOpMapFunction()).uid("map")
 				.addSink(new NoOpSinkFunction());
 
-		env.getStreamGraph().getJobGraph();
+			env.getStreamGraph().getJobGraph();
+		}catch(Exception e){
+			fail("unexpected exception");
+		}
 	}
 
 	/**

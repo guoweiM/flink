@@ -98,7 +98,7 @@ public class StateAssignmentOperation {
 				}
 			}
 
-			checkParallelismPreconditions(taskState, executionJobVertex);
+			checkParallelismPreconditions(taskState, executionJobVertex,logger);
 
 			assignTaskStatesToOperatorInstances(taskState, executionJobVertex);
 		}
@@ -106,7 +106,7 @@ public class StateAssignmentOperation {
 		return true;
 	}
 
-	private void checkParallelismPreconditions(org.apache.flink.runtime.checkpoint.TaskState taskState, ExecutionJobVertex executionJobVertex) {
+	public static void checkParallelismPreconditions(org.apache.flink.runtime.checkpoint.TaskState taskState, ExecutionJobVertex executionJobVertex, Logger logger) {
 		//----------------------------------------max parallelism preconditions-------------------------------------
 
 		// check that the number of key groups have not changed or if we need to override it to satisfy the restored state
