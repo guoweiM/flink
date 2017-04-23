@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.checkpoint;
 
+import com.google.common.collect.Lists;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.migration.runtime.checkpoint.StateAssignmentOperation;
 import org.apache.flink.runtime.executiongraph.Execution;
@@ -33,11 +34,7 @@ import org.apache.flink.runtime.state.TaskStateHandles;
 import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * This class encapsulates the operation of assigning restored state when restoring from a checkpoint.
@@ -64,17 +61,20 @@ public class StateAssignmentOperationV2 {
 	public boolean assignStates() throws Exception {
 		Map<JobVertexID, ExecutionJobVertex> localTasks = this.tasks;
 
+		Set<JobVertexID> allOperatorIDs = new HashSet<>();
+		for(ExecutionJobVertex executionJobVertex : tasks.values()){
+			allOperatorIDs.addAll(Lists.newArrayList(executionJobVertex.getOperatorIDs()));
+		}
 		for (Map.Entry<JobVertexID, org.apache.flink.runtime.checkpoint.TaskState> taskGroupStateEntry : taskStates.entrySet()) {
 			org.apache.flink.runtime.checkpoint.TaskState taskState = taskGroupStateEntry.getValue();
-			//----------------------------------------find vertex for state---------------------------------------------
-			ExecutionJobVertex executionJobVertex = localTasks.get(taskGroupStateEntry.getKey());
-			if (executionJobVertex == null) {
+			//----------------------------------------find operator for state---------------------------------------------
+
+			if (!allOperatorIDs.contains(taskGroupStateEntry.getKey())) {
 				if (allowNonRestoredState) {
 					logger.info("Skipped checkpoint state for operator {}.", taskState.getJobVertexID());
 					continue;
 				} else {
-					throw new IllegalStateException("There is no execution job vertex for the job" +
-						" vertex ID " + taskGroupStateEntry.getKey());
+					throw new IllegalStateException("There is no operator for the state " + taskState.getJobVertexID());
 				}
 			}
 		}
