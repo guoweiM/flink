@@ -89,9 +89,6 @@ public class BucketingSinkFaultToleranceITCase extends StreamFaultToleranceTestB
 		outPath = "hdfs://"
 				+ NetUtils.hostAndPortToUrlString(hdfsCluster.getURI().getHost(), hdfsCluster.getNameNodePort())
 				+ "/string-non-rolling-out";
-
-		System.err.println("===============");
-		System.err.println(outPath);
 	}
 
 	@AfterClass
