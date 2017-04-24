@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.checkpoint;
 
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -53,7 +54,6 @@ import org.apache.flink.runtime.util.TestByteStreamStateHandleDeepCompare;
 import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.Preconditions;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -165,7 +165,8 @@ public class CheckpointCoordinatorTest {
 			final ExecutionAttemptID triggerAttemptID1 = new ExecutionAttemptID();
 			final ExecutionAttemptID triggerAttemptID2 = new ExecutionAttemptID();
 			ExecutionVertex triggerVertex1 = mockExecutionVertex(triggerAttemptID1);
-			ExecutionVertex triggerVertex2 = mockExecutionVertex(triggerAttemptID2, new JobVertexID(), 1, 1, ExecutionState.FINISHED);
+			JobVertexID jobVertexID2 = new JobVertexID();
+			ExecutionVertex triggerVertex2 = mockExecutionVertex(triggerAttemptID2, jobVertexID2 , new JobVertexID[]{jobVertexID2}, 1, 1, ExecutionState.FINISHED);
 
 			// create some mock Execution vertices that need to ack the checkpoint
 			final ExecutionAttemptID ackAttemptID1 = new ExecutionAttemptID();
@@ -1873,10 +1874,12 @@ public class CheckpointCoordinatorTest {
 
 		final ExecutionJobVertex jobVertex1 = mockExecutionJobVertex(
 			jobVertexID1,
+			new JobVertexID[] {jobVertexID1},
 			parallelism1,
 			maxParallelism1);
 		final ExecutionJobVertex jobVertex2 = mockExecutionJobVertex(
 			jobVertexID2,
+			new JobVertexID[] {jobVertexID2},
 			parallelism2,
 			maxParallelism2);
 
@@ -1981,10 +1984,12 @@ public class CheckpointCoordinatorTest {
 
 		final ExecutionJobVertex jobVertex1 = mockExecutionJobVertex(
 			jobVertexID1,
+			new JobVertexID[] {jobVertexID1},
 			parallelism1,
 			maxParallelism1);
 		final ExecutionJobVertex jobVertex2 = mockExecutionJobVertex(
 			jobVertexID2,
+			new JobVertexID[] {jobVertexID2},
 			parallelism2,
 			maxParallelism2);
 
@@ -2061,11 +2066,13 @@ public class CheckpointCoordinatorTest {
 
 		final ExecutionJobVertex newJobVertex1 = mockExecutionJobVertex(
 			jobVertexID1,
+			new JobVertexID[]{jobVertexID1},
 			parallelism1,
 			newMaxParallelism1);
 
 		final ExecutionJobVertex newJobVertex2 = mockExecutionJobVertex(
 			jobVertexID2,
+			new JobVertexID[]{jobVertexID2},
 			parallelism2,
 			newMaxParallelism2);
 
@@ -2097,10 +2104,12 @@ public class CheckpointCoordinatorTest {
 
 		final ExecutionJobVertex jobVertex1 = mockExecutionJobVertex(
 			jobVertexID1,
+			new JobVertexID[]{jobVertexID1},
 			parallelism1,
 			maxParallelism1);
 		final ExecutionJobVertex jobVertex2 = mockExecutionJobVertex(
 			jobVertexID2,
+			new JobVertexID[]{jobVertexID2},
 			parallelism2,
 			maxParallelism2);
 
@@ -2185,11 +2194,13 @@ public class CheckpointCoordinatorTest {
 
 		final ExecutionJobVertex newJobVertex1 = mockExecutionJobVertex(
 			jobVertexID1,
+			new JobVertexID[]{jobVertexID1},
 			newParallelism1,
 			maxParallelism1);
 
 		final ExecutionJobVertex newJobVertex2 = mockExecutionJobVertex(
 			jobVertexID2,
+			new JobVertexID[]{jobVertexID2},
 			newParallelism2,
 			maxParallelism2);
 
@@ -2211,6 +2222,22 @@ public class CheckpointCoordinatorTest {
 	public void testRestoreLatestCheckpointedStateScaleOut() throws Exception {
 		testRestoreLatestCheckpointedStateWithChangingParallelism(false);
 	}
+
+	@Test
+	public void testStateRecoveryWhenTopologyChangeOut() throws Exception {
+		testStateRecoveryWithTopologyChange(0);
+	}
+
+	@Test
+	public void testStateRecoveryWhenTopologyChangeIn() throws Exception {
+		testStateRecoveryWithTopologyChange(1);
+	}
+
+	@Test
+	public void testStateRecoveryWhenTopologyChange() throws Exception {
+		testStateRecoveryWithTopologyChange(2);
+	}
+
 
 	/**
 	 * Tests the checkpoint restoration with changing parallelism of job vertex with partitioned
@@ -2234,10 +2261,12 @@ public class CheckpointCoordinatorTest {
 
 		final ExecutionJobVertex jobVertex1 = mockExecutionJobVertex(
 				jobVertexID1,
+				new JobVertexID[]{jobVertexID1},
 				parallelism1,
 				maxParallelism1);
 		final ExecutionJobVertex jobVertex2 = mockExecutionJobVertex(
 				jobVertexID2,
+				new JobVertexID[]{jobVertexID2},
 				parallelism2,
 				maxParallelism2);
 
@@ -2329,12 +2358,14 @@ public class CheckpointCoordinatorTest {
 
 		final ExecutionJobVertex newJobVertex1 = mockExecutionJobVertex(
 				jobVertexID1,
+				new JobVertexID[]{jobVertexID1},
 				parallelism1,
 				maxParallelism1);
 
 		// rescale vertex 2
 		final ExecutionJobVertex newJobVertex2 = mockExecutionJobVertex(
 				jobVertexID2,
+				new JobVertexID[]{jobVertexID2},
 				newParallelism2,
 				maxParallelism2);
 
@@ -2360,13 +2391,296 @@ public class CheckpointCoordinatorTest {
 
 			actualOpStatesBackend.add(opStateBackend);
 			actualOpStatesRaw.add(opStateRaw);
-			assertNull(operatorState);
+			// the 'non partition state' is not null because it is recombined.
+			assertNotNull(operatorState);
+			for(int index = 0; index < operatorState.getLength(); index++){
+				assertNull(operatorState.get(index));
+			}
 			compareKeyedState(Collections.singletonList(originalKeyedStateBackend), keyedStateBackend);
 			compareKeyedState(Collections.singletonList(originalKeyedStateRaw), keyGroupStateRaw);
 		}
 		comparePartitionableState(expectedOpStatesBackend, actualOpStatesBackend);
 		comparePartitionableState(expectedOpStatesRaw, actualOpStatesRaw);
 	}
+
+
+	/**
+	 *
+	 * old topology
+	 * [operator1,operator2] * parallelism1 -> [operator3,operator4] * parallelism2
+	 *
+	 *
+	 * new topology
+	 *
+	 * [operator5,operator1,operator3] * newParallelism1 -> [operator3, operator6] * newParallelism2
+	 *
+	 * scaleType:
+	 *  0  increase parallelism
+	 *  1  decrease parallelism
+	 *  2  same parallelism
+	 */
+	public void testStateRecoveryWithTopologyChange(int scaleType) throws Exception {
+
+		/**
+		 * old topology
+		 * [operator1,operator2] * parallelism1 -> [operator3,operator4] * parallelism2
+		 *
+		 */
+
+
+		JobVertexID operatorID1 = new JobVertexID();
+		JobVertexID operatorID2 = new JobVertexID();
+		int parallelism1 = 10;
+		int maxParallelism1 = 64;
+		int chainedLength1 = 2;
+		List<KeyGroupRange> keyGroupPartitions1 =
+			StateAssignmentOperation.createKeyGroupPartitions(maxParallelism1, parallelism1);
+		JobVertexID headOperatorID1 = operatorID1;
+
+
+		JobVertexID operatorID3 = new JobVertexID();
+		JobVertexID operatorID4 = new JobVertexID();
+		int parallelism2 = 10;
+		int maxParallelism2 = 64;
+		int chainedLength2 = 2;
+		JobVertexID headOperatorID2 = operatorID3;
+
+		List<KeyGroupRange> keyGroupPartitions2 =
+			StateAssignmentOperation.createKeyGroupPartitions(maxParallelism2, parallelism2);
+
+
+		Map<JobVertexID, TaskState> taskStates = new HashMap<>();
+
+		//prepare vertex1 state
+		for(JobVertexID operatorID : Lists.newArrayList(operatorID1, operatorID2)){
+			TaskState taskState = new TaskState(operatorID, parallelism1, maxParallelism1, 1);
+			taskStates.put(operatorID, taskState);
+			for(int index = 0; index < taskState.getParallelism(); index++){
+				ChainedStateHandle<StreamStateHandle> subNonPartitionedState = generateStateForVertex(operatorID, index);
+				ChainedStateHandle<OperatorStateHandle> subManagedOperatorState =
+					generateChainedPartitionableStateHandle(operatorID, index, 2, 8, false);
+				ChainedStateHandle<OperatorStateHandle> subRawOperatorState =
+					generateChainedPartitionableStateHandle(operatorID, index, 2, 8, true);
+
+				SubtaskState subtaskState = new SubtaskState(subNonPartitionedState,
+					subManagedOperatorState,
+					subRawOperatorState,
+					null,null);
+				taskState.putState(index, subtaskState);
+			}
+		}
+
+		List<List<ChainedStateHandle<OperatorStateHandle>>> expectedManagedOperatorStates = new ArrayList<>();
+		List<List<ChainedStateHandle<OperatorStateHandle>>> expectedRawOperatorStates = new ArrayList<>();
+		//prepare vertex2 state
+		for(JobVertexID operatorID : Lists.newArrayList(operatorID3, operatorID4)){
+			TaskState taskState = new TaskState(operatorID, parallelism2, maxParallelism2, 1);
+			taskStates.put(operatorID, taskState);
+			List<ChainedStateHandle<OperatorStateHandle>> expectedManagedOperatorState = new ArrayList<>();
+			List<ChainedStateHandle<OperatorStateHandle>> expectedRawOperatorState = new ArrayList<>();
+			expectedManagedOperatorStates.add(expectedManagedOperatorState);
+			expectedRawOperatorStates.add(expectedRawOperatorState);
+
+			for(int index = 0; index < taskState.getParallelism(); index++){
+				ChainedStateHandle<OperatorStateHandle> subManagedOperatorState =
+					generateChainedPartitionableStateHandle(operatorID, index, 2, 8, false);
+				ChainedStateHandle<OperatorStateHandle> subRawOperatorState =
+					generateChainedPartitionableStateHandle(operatorID, index, 2, 8, true);
+				expectedManagedOperatorState.add(subManagedOperatorState);
+				expectedRawOperatorState.add(subRawOperatorState);
+				KeyGroupsStateHandle subManagedKeyedState =
+					generateKeyGroupState(operatorID3, keyGroupPartitions2.get(index), false);
+				KeyGroupsStateHandle subRawKeyedState =
+					generateKeyGroupState(operatorID3, keyGroupPartitions2.get(index), true);
+
+				SubtaskState subtaskState = new SubtaskState(
+					new ChainedStateHandle<>(Lists.newArrayList((StreamStateHandle) null,null)),
+					subManagedOperatorState,
+					subRawOperatorState,
+					subManagedKeyedState,subRawKeyedState);
+				taskState.putState(index, subtaskState);
+			}
+		}
+
+
+
+
+		/**
+		 * new topology
+		 *
+		 * [operator5,operator1,operator3] * newParallelism1 -> [operator3, operator6] * newParallelism2
+		 */
+
+		JobVertexID operatorID5 = new JobVertexID();
+		int newParallelism1 = 10;
+
+		JobVertexID operatorID6 = new JobVertexID();
+		int newParallelism2 = parallelism2;
+
+		if (scaleType == 0){
+			newParallelism2 = 20;
+		}else if (scaleType == 1){
+			newParallelism2 = 8;
+		}
+
+		List<KeyGroupRange> newKeyGroupPartitions2 =
+			StateAssignmentOperation.createKeyGroupPartitions(maxParallelism2, newParallelism2);
+
+
+		final ExecutionJobVertex newJobVertex1 = mockExecutionJobVertex(
+			operatorID5,
+			new JobVertexID[]{operatorID3, operatorID1, operatorID5},
+			newParallelism1,
+			maxParallelism1);
+
+		final ExecutionJobVertex newJobVertex2 = mockExecutionJobVertex(
+			operatorID3,
+			new JobVertexID[]{operatorID6, operatorID3},
+			newParallelism2,
+			maxParallelism2);
+
+		Map<JobVertexID, ExecutionJobVertex> tasks = new HashMap<>();
+
+		tasks.put(operatorID5, newJobVertex1);
+		tasks.put(operatorID3, newJobVertex2);
+
+
+		JobID jobID = new JobID();
+		StandaloneCompletedCheckpointStore standaloneCompletedCheckpointStore =
+			spy(new StandaloneCompletedCheckpointStore(1));
+
+		CompletedCheckpoint completedCheckpoint =
+			new CompletedCheckpoint(jobID,
+				2,
+				System.currentTimeMillis(),
+				System.currentTimeMillis() + 3000,
+				taskStates);
+
+		when(standaloneCompletedCheckpointStore.getLatestCheckpoint()).thenReturn(completedCheckpoint);
+
+		// set up the coordinator and validate the initial state
+		CheckpointCoordinator coord = new CheckpointCoordinator(
+			new JobID(),
+			600000,
+			600000,
+			0,
+			Integer.MAX_VALUE,
+			ExternalizedCheckpointSettings.none(),
+			newJobVertex1.getTaskVertices(),
+			newJobVertex1.getTaskVertices(),
+			newJobVertex1.getTaskVertices(),
+			new StandaloneCheckpointIDCounter(),
+			standaloneCompletedCheckpointStore,
+			null,
+			Executors.directExecutor());
+
+
+		coord.restoreLatestCheckpointedState(tasks, false, true);
+
+		for (int i = 0; i < newJobVertex1.getParallelism(); i++) {
+
+			TaskStateHandles taskStateHandles = newJobVertex1.getTaskVertices()[i].getCurrentExecutionAttempt().getTaskStateHandles();
+			ChainedStateHandle<StreamStateHandle> actualSubNonPartitionedState = taskStateHandles.getLegacyOperatorState();
+			List<Collection<OperatorStateHandle>> actualSubManagedOperatorState = taskStateHandles.getManagedOperatorState();
+			List<Collection<OperatorStateHandle>> actualSubRawOperatorState = taskStateHandles.getRawOperatorState();
+
+			assertNull(taskStateHandles.getManagedKeyedState());
+			assertNull(taskStateHandles.getRawKeyedState());
+
+			// operator5
+			{
+				int operatorIndexInChain = 2;
+				assertNull(actualSubNonPartitionedState.get(operatorIndexInChain));
+				assertNull(actualSubManagedOperatorState.get(operatorIndexInChain));
+				assertNull(actualSubRawOperatorState.get(operatorIndexInChain));
+			}
+			// operator1
+			{
+				int operatorIndexInChain = 1;
+				ChainedStateHandle<StreamStateHandle> expectSubNonPartitionedState =  generateStateForVertex(operatorID1, i);
+				ChainedStateHandle<OperatorStateHandle> expectedManagedOpState = generateChainedPartitionableStateHandle(
+					operatorID1, i, 2, 8, false);
+				ChainedStateHandle<OperatorStateHandle> expectedRawOpState = generateChainedPartitionableStateHandle(
+					operatorID1, i, 2, 8, true);
+
+				assertTrue(CommonTestUtils.isSteamContentEqual(
+					expectSubNonPartitionedState.get(0).openInputStream(),
+					actualSubNonPartitionedState.get(operatorIndexInChain).openInputStream()));
+
+				assertTrue(CommonTestUtils.isSteamContentEqual(expectedManagedOpState.get(0).openInputStream(),
+					actualSubManagedOperatorState.get(operatorIndexInChain).iterator().next().openInputStream()));
+
+				assertTrue(CommonTestUtils.isSteamContentEqual(expectedRawOpState.get(0).openInputStream(),
+					actualSubRawOperatorState.get(operatorIndexInChain).iterator().next().openInputStream()));
+			}
+			// operator3
+			{
+				int operatorIndexInChain = 0;
+				ChainedStateHandle<StreamStateHandle> expectSubNonPartitionedState =  generateStateForVertex(operatorID3, i);
+				ChainedStateHandle<OperatorStateHandle> expectedManagedOpState = generateChainedPartitionableStateHandle(
+					operatorID3, i, 2, 8, false);
+				ChainedStateHandle<OperatorStateHandle> expectedRawOpState = generateChainedPartitionableStateHandle(
+					operatorID3, i, 2, 8, true);
+
+				assertNull(actualSubNonPartitionedState.get(operatorIndexInChain));
+				assertTrue(CommonTestUtils.isSteamContentEqual(expectedManagedOpState.get(0).openInputStream(),
+					actualSubManagedOperatorState.get(operatorIndexInChain).iterator().next().openInputStream()));
+
+				assertTrue(CommonTestUtils.isSteamContentEqual(expectedRawOpState.get(0).openInputStream(),
+					actualSubRawOperatorState.get(operatorIndexInChain).iterator().next().openInputStream()));
+			}
+		}
+
+
+		List<List<Collection<OperatorStateHandle>>> actualManagedOperatorStates = new ArrayList<>(newJobVertex2.getParallelism());
+		List<List<Collection<OperatorStateHandle>>> actualRawOperatorStates = new ArrayList<>(newJobVertex2.getParallelism());
+
+		for(int i = 0; i < newJobVertex2.getParallelism(); i++){
+			TaskStateHandles taskStateHandles = newJobVertex2.getTaskVertices()[i].getCurrentExecutionAttempt().getTaskStateHandles();
+
+			// operator 3
+			{
+				int operatorIndexInChain = 1;
+				List<Collection<OperatorStateHandle>> actualSubManagedOperatorState = new ArrayList<>(1);
+				actualSubManagedOperatorState.add(taskStateHandles.getManagedOperatorState().get(operatorIndexInChain));
+
+				List<Collection<OperatorStateHandle>> actualSubRawOperatorState = new ArrayList<>(1);
+				actualSubRawOperatorState.add(taskStateHandles.getRawOperatorState().get(operatorIndexInChain));
+
+				actualManagedOperatorStates.add(actualSubManagedOperatorState);
+				actualRawOperatorStates.add(actualSubRawOperatorState);
+
+				assertNull(taskStateHandles.getLegacyOperatorState().get(operatorIndexInChain));
+			}
+
+			// operator 6
+			{
+				int operatorIndexInChain = 0;
+				assertNull(taskStateHandles.getManagedOperatorState().get(operatorIndexInChain));
+				assertNull(taskStateHandles.getRawOperatorState().get(operatorIndexInChain));
+				assertNull(taskStateHandles.getLegacyOperatorState().get(operatorIndexInChain));
+
+			}
+
+			KeyGroupsStateHandle originalKeyedStateBackend = generateKeyGroupState(operatorID3, newKeyGroupPartitions2.get(i), false);
+			KeyGroupsStateHandle originalKeyedStateRaw = generateKeyGroupState(operatorID3, newKeyGroupPartitions2.get(i), true);
+
+
+			Collection<KeyedStateHandle> keyedStateBackend = taskStateHandles.getManagedKeyedState();
+			Collection<KeyedStateHandle> keyGroupStateRaw = taskStateHandles.getRawKeyedState();
+
+
+			compareKeyedState(Collections.singletonList(originalKeyedStateBackend), keyedStateBackend);
+			compareKeyedState(Collections.singletonList(originalKeyedStateRaw), keyGroupStateRaw);
+
+		}
+
+		comparePartitionableState(expectedManagedOperatorStates.get(0), actualManagedOperatorStates);
+		comparePartitionableState(expectedRawOperatorStates.get(0), actualRawOperatorStates);
+
+	}
+
+
 
 	/**
 	 * Tests that the externalized checkpoint configuration is respected.
@@ -2479,6 +2793,7 @@ public class CheckpointCoordinatorTest {
 
 		return generateKeyGroupState(keyGroupPartition, testStatesLists);
 	}
+
 
 	public static KeyGroupsStateHandle generateKeyGroupState(
 			KeyGroupRange keyGroupRange,
@@ -2611,6 +2926,7 @@ public class CheckpointCoordinatorTest {
 
 	static ExecutionJobVertex mockExecutionJobVertex(
 		JobVertexID jobVertexID,
+		JobVertexID[] operatorIDs,
 		int parallelism,
 		int maxParallelism) {
 		final ExecutionJobVertex executionJobVertex = mock(ExecutionJobVertex.class);
@@ -2621,6 +2937,7 @@ public class CheckpointCoordinatorTest {
 			executionVertices[i] = mockExecutionVertex(
 				new ExecutionAttemptID(),
 				jobVertexID,
+				operatorIDs,
 				parallelism,
 				maxParallelism,
 				ExecutionState.RUNNING);
@@ -2633,15 +2950,17 @@ public class CheckpointCoordinatorTest {
 		when(executionJobVertex.getParallelism()).thenReturn(parallelism);
 		when(executionJobVertex.getMaxParallelism()).thenReturn(maxParallelism);
 		when(executionJobVertex.isMaxParallelismConfigured()).thenReturn(true);
-		when(executionJobVertex.getOperatorIDs()).thenReturn(new JobVertexID[]{jobVertexID});
+		when(executionJobVertex.getOperatorIDs()).thenReturn(operatorIDs);
 
 		return executionJobVertex;
 	}
 
 	static ExecutionVertex mockExecutionVertex(ExecutionAttemptID attemptID) {
+		JobVertexID jobVertexID = new JobVertexID();
 		return mockExecutionVertex(
 			attemptID,
-			new JobVertexID(),
+			jobVertexID,
+			new JobVertexID[]{jobVertexID},
 			1,
 			1,
 			ExecutionState.RUNNING);
@@ -2650,6 +2969,7 @@ public class CheckpointCoordinatorTest {
 	private static ExecutionVertex mockExecutionVertex(
 		ExecutionAttemptID attemptID,
 		JobVertexID jobVertexID,
+		JobVertexID[] operatorIDs,
 		int parallelism,
 		int maxParallelism,
 		ExecutionState state,
@@ -2673,7 +2993,7 @@ public class CheckpointCoordinatorTest {
 		when(vertex.getMaxParallelism()).thenReturn(maxParallelism);
 
 		ExecutionJobVertex jobVertex = mock(ExecutionJobVertex.class);
-		when(jobVertex.getOperatorIDs()).thenReturn(new JobVertexID[]{jobVertexID});
+		when(jobVertex.getOperatorIDs()).thenReturn(operatorIDs);
 		
 		when(vertex.getJobVertex()).thenReturn(jobVertex);
 

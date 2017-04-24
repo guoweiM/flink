@@ -163,7 +163,7 @@ public class StateAssignmentOperationV2 {
 		 * op2   sh(2,0)	 sh(2,1)	   sh(2,2)		sh(2,3)
 		 * op3   sh(3,0)	 sh(3,1)	   sh(3,2)		sh(3,3)
 		 *
-		 * TODO: finish the comments
+		 * we will compute the state handles column by column.
 		 *
 		 */
 		for(int subTaskIndex = 0; subTaskIndex < newParallelism; subTaskIndex++) {
@@ -178,27 +178,18 @@ public class StateAssignmentOperationV2 {
 			List<Collection<OperatorStateHandle>> subManagedOperatorState = new ArrayList<>();
 			List<Collection<OperatorStateHandle>> subRawOperatorState = new ArrayList<>();
 
-			boolean oldHasNonPartitionState = false;
-
 			for(int operatorIndex = 0; operatorIndex < operatorIDs.length; operatorIndex++) {
 				TaskState operatorState = operatorStates.get(operatorIndex);
 				int oldParallelism = operatorState.getParallelism();
 
 				// NonPartitioned State
-				if (oldParallelism == newParallelism) {
-					if (operatorState.getState(subTaskIndex) != null){
-						oldHasNonPartitionState = true;
-						if (!operatorState.getState(subTaskIndex).getLegacyOperatorState().isEmpty()) {
-							subNonPartitionableState.add(operatorState.getState(subTaskIndex).getLegacyOperatorState().get(0));
-						}else{
-							subNonPartitionableState.add(null);
-						}
-					}else{
-						subNonPartitionableState.add(null);
-					}
-				}else{
-					subNonPartitionableState.add(null);
-				}
+				reAssignSubNonPartitionedStates(operatorIDs[operatorIndex],
+					operatorState,
+					subTaskIndex,
+					newParallelism,
+					oldParallelism,
+					subNonPartitionableState);
+
 
 				// PartitionedState
 				reAssignSubPartitionableState(newManagedOperatorStates,
@@ -210,7 +201,7 @@ public class StateAssignmentOperationV2 {
 
 				// KeyedState
 				if (operatorIndex == operatorIDs.length - 1 ) {
-					subKeyedState = reassignSubKeyedStates(operatorState,
+					subKeyedState = reAssignSubKeyedStates(operatorState,
 						keyGroupPartitions,
 						subTaskIndex,
 						newParallelism,
@@ -218,14 +209,9 @@ public class StateAssignmentOperationV2 {
 				}
 			}
 
-			//if old state has not non partition state
-			//there is no state to restore
-			if (!oldHasNonPartitionState){
-				subNonPartitionableState = null;
-			}
 
-
-			if (subNonPartitionableState != null ||
+			// check if a stateless task
+			if (! allElementsAreNull(subNonPartitionableState) ||
 				! allElementsAreNull(subManagedOperatorState) ||
 				! allElementsAreNull(subRawOperatorState) ||
 				subKeyedState != null) {
@@ -271,7 +257,7 @@ public class StateAssignmentOperationV2 {
 
 	}
 
-	private Tuple2<Collection<KeyedStateHandle>,Collection<KeyedStateHandle>> reassignSubKeyedStates(
+	private Tuple2<Collection<KeyedStateHandle>,Collection<KeyedStateHandle>> reAssignSubKeyedStates(
 		TaskState operatorState,
 		List<KeyGroupRange> keyGroupPartitions,
 		int subTaskIndex,
@@ -313,7 +299,7 @@ public class StateAssignmentOperationV2 {
 		return true;
 	}
 
-	private void reassignSubNonPartitionedStates(JobVertexID operatorID,
+	private void reAssignSubNonPartitionedStates(JobVertexID operatorID,
 		TaskState operatorState,
 		int subTaskIndex,
 		int newParallelism,
@@ -377,7 +363,7 @@ public class StateAssignmentOperationV2 {
 						}
 						managedOperatorState.add(subtaskState.getManagedOperatorState().get(0));
 					}
-					if (subtaskState.getRawKeyedState() != null &&
+					if (subtaskState.getRawOperatorState() != null &&
 						subtaskState.getRawOperatorState().getLength() >0 &&
 						subtaskState.getRawOperatorState().get(0) != null){
 						if (rawOperatorState == null){
