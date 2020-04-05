@@ -18,7 +18,6 @@
 
 package org.apache.flink.api.java.typeutils;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.annotation.Public;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.ExecutionConfig;
@@ -30,6 +29,8 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.typeutils.runtime.PojoComparator;
 import org.apache.flink.api.java.typeutils.runtime.PojoSerializer;
 import org.apache.flink.api.java.typeutils.runtime.kryo.KryoSerializer;
+
+import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -52,25 +53,24 @@ import static org.apache.flink.util.Preconditions.checkState;
  *   <li>It has a public no-argument constructor.</li>
  *   <li>All fields are either public, or have public getters and setters.</li>
  * </ul>
- * 
  * @param <T> The type represented by this type information.
  */
 @Public
 public class PojoTypeInfo<T> extends CompositeType<T> {
-	
+
 	private static final long serialVersionUID = 1L;
 
-	private final static String REGEX_FIELD = "[\\p{L}_\\$][\\p{L}\\p{Digit}_\\$]*";
-	private final static String REGEX_NESTED_FIELDS = "("+REGEX_FIELD+")(\\.(.+))?";
-	private final static String REGEX_NESTED_FIELDS_WILDCARD = REGEX_NESTED_FIELDS
-					+"|\\"+ExpressionKeys.SELECT_ALL_CHAR
-					+"|\\"+ExpressionKeys.SELECT_ALL_CHAR_SCALA;
+	private static final String REGEX_FIELD = "[\\p{L}_$][\\p{L}\\p{Digit}_$]*";
+	private static final String REGEX_NESTED_FIELDS = "(" + REGEX_FIELD + ")(\\.(.+))?";
+	private static final String REGEX_NESTED_FIELDS_WILDCARD = REGEX_NESTED_FIELDS
+					+ "|\\" + ExpressionKeys.SELECT_ALL_CHAR
+					+ "|\\" + ExpressionKeys.SELECT_ALL_CHAR_SCALA;
 
 	private static final Pattern PATTERN_NESTED_FIELDS = Pattern.compile(REGEX_NESTED_FIELDS);
 	private static final Pattern PATTERN_NESTED_FIELDS_WILDCARD = Pattern.compile(REGEX_NESTED_FIELDS_WILDCARD);
 
 	private final PojoField[] fields;
-	
+
 	private final int totalFields;
 
 	@PublicEvolving
@@ -80,18 +80,13 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 		checkArgument(Modifier.isPublic(typeClass.getModifiers()),
 				"POJO %s is not public", typeClass);
 
-		this.fields = fields.toArray(new PojoField[fields.size()]);
+		this.fields = fields.toArray(new PojoField[0]);
 
-		Arrays.sort(this.fields, new Comparator<PojoField>() {
-			@Override
-			public int compare(PojoField o1, PojoField o2) {
-				return o1.getField().getName().compareTo(o2.getField().getName());
-			}
-		});
+		Arrays.sort(this.fields, Comparator.comparing(o -> o.getField().getName()));
 
 		int counterFields = 0;
 
-		for(PojoField field : fields) {
+		for (PojoField field : fields) {
 			counterFields += field.getTypeInformation().getTotalFields();
 		}
 
@@ -104,7 +99,6 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 		return false;
 	}
 
-
 	@Override
 	@PublicEvolving
 	public boolean isTupleType() {
@@ -116,7 +110,7 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 	public int getArity() {
 		return fields.length;
 	}
-	
+
 	@Override
 	@PublicEvolving
 	public int getTotalFields() {
@@ -131,26 +125,25 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 		//   gives only some undefined order.
 		return false;
 	}
-	
 
 	@Override
 	@PublicEvolving
 	public void getFlatFields(String fieldExpression, int offset, List<FlatFieldDescriptor> result) {
 
 		Matcher matcher = PATTERN_NESTED_FIELDS_WILDCARD.matcher(fieldExpression);
-		if(!matcher.matches()) {
-			throw new InvalidFieldReferenceException("Invalid POJO field reference \""+fieldExpression+"\".");
+		if (!matcher.matches()) {
+			throw new InvalidFieldReferenceException("Invalid POJO field reference \"" + fieldExpression + "\".");
 		}
 
 		String field = matcher.group(0);
-		if(field.equals(ExpressionKeys.SELECT_ALL_CHAR) || field.equals(ExpressionKeys.SELECT_ALL_CHAR_SCALA)) {
+		if (field.equals(ExpressionKeys.SELECT_ALL_CHAR) || field.equals(ExpressionKeys.SELECT_ALL_CHAR_SCALA)) {
 			// handle select all
 			int keyPosition = 0;
-			for(PojoField pField : fields) {
-				if(pField.getTypeInformation() instanceof CompositeType) {
-					CompositeType<?> cType = (CompositeType<?>)pField.getTypeInformation();
-					cType.getFlatFields(String.valueOf(ExpressionKeys.SELECT_ALL_CHAR), offset + keyPosition, result);
-					keyPosition += cType.getTotalFields()-1;
+			for (PojoField pField : fields) {
+				if (pField.getTypeInformation() instanceof CompositeType) {
+					CompositeType<?> cType = (CompositeType<?>) pField.getTypeInformation();
+					cType.getFlatFields(ExpressionKeys.SELECT_ALL_CHAR, offset + keyPosition, result);
+					keyPosition += cType.getTotalFields() - 1;
 				} else {
 					result.add(
 						new NamedFlatFieldDescriptor(
@@ -176,13 +169,13 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 			}
 		}
 		if (fieldPos == -1) {
-			throw new InvalidFieldReferenceException("Unable to find field \""+field+"\" in type "+this+".");
+			throw new InvalidFieldReferenceException("Unable to find field \"" + field + "\" in type " + this + ".");
 		}
 		String tail = matcher.group(3);
-		if(tail == null) {
-			if(fieldType instanceof CompositeType) {
+		if (tail == null) {
+			if (fieldType instanceof CompositeType) {
 				// forward offset
-				for(int i=0; i<fieldPos; i++) {
+				for (int i = 0; i < fieldPos; i++) {
 					offset += this.getTypeAt(i).getTotalFields();
 				}
 				// add all fields of composite type
@@ -191,20 +184,21 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 				// we found the field to add
 				// compute flat field position by adding skipped fields
 				int flatFieldPos = offset;
-				for(int i=0; i<fieldPos; i++) {
+				for (int i = 0; i < fieldPos; i++) {
 					flatFieldPos += this.getTypeAt(i).getTotalFields();
 				}
 				result.add(new FlatFieldDescriptor(flatFieldPos, fieldType));
 			}
 		} else {
-			if(fieldType instanceof CompositeType<?>) {
+			if (fieldType instanceof CompositeType<?>) {
 				// forward offset
-				for(int i=0; i<fieldPos; i++) {
+				for (int i = 0; i < fieldPos; i++) {
 					offset += this.getTypeAt(i).getTotalFields();
 				}
 				((CompositeType<?>) fieldType).getFlatFields(tail, offset, result);
 			} else {
-				throw new InvalidFieldReferenceException("Nested field expression \""+tail+"\" not possible on atomic type "+fieldType+".");
+				throw new InvalidFieldReferenceException("Nested field expression \"" + tail
+					+ "\" not possible on atomic type " + fieldType + ".");
 			}
 		}
 	}
@@ -215,11 +209,11 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 	public <X> TypeInformation<X> getTypeAt(String fieldExpression) {
 
 		Matcher matcher = PATTERN_NESTED_FIELDS.matcher(fieldExpression);
-		if(!matcher.matches()) {
+		if (!matcher.matches()) {
 			if (fieldExpression.startsWith(ExpressionKeys.SELECT_ALL_CHAR) || fieldExpression.startsWith(ExpressionKeys.SELECT_ALL_CHAR_SCALA)) {
 				throw new InvalidFieldReferenceException("Wildcard expressions are not allowed here.");
 			} else {
-				throw new InvalidFieldReferenceException("Invalid format of POJO field expression \""+fieldExpression+"\".");
+				throw new InvalidFieldReferenceException("Invalid format of POJO field expression \"" + fieldExpression + "\".");
 			}
 		}
 
@@ -235,18 +229,19 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 			}
 		}
 		if (fieldPos == -1) {
-			throw new InvalidFieldReferenceException("Unable to find field \""+field+"\" in type "+this+".");
+			throw new InvalidFieldReferenceException("Unable to find field \"" + field + "\" in type " + this + ".");
 		}
 
 		String tail = matcher.group(3);
-		if(tail == null) {
+		if (tail == null) {
 			// we found the type
 			return (TypeInformation<X>) fieldType;
 		} else {
-			if(fieldType instanceof CompositeType<?>) {
+			if (fieldType instanceof CompositeType<?>) {
 				return ((CompositeType<?>) fieldType).getTypeAt(tail);
 			} else {
-				throw new InvalidFieldReferenceException("Nested field expression \""+tail+"\" not possible on atomic type "+fieldType+".");
+				throw new InvalidFieldReferenceException("Nested field expression \"" + tail
+					+ "\" not possible on atomic type " + fieldType + ".");
 			}
 		}
 	}
@@ -298,7 +293,6 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 
 	@Override
 	@PublicEvolving
-	@SuppressWarnings("unchecked")
 	public TypeSerializer<T> createSerializer(ExecutionConfig config) {
 		if (config.isForceKryoEnabled()) {
 			return new KryoSerializer<>(getTypeClass(), config);
@@ -320,14 +314,14 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 			reflectiveFields[i] = fields[i].getField();
 		}
 
-		return new PojoSerializer<T>(getTypeClass(), fieldSerializers, reflectiveFields, config);
+		return new PojoSerializer<>(getTypeClass(), fieldSerializers, reflectiveFields, config);
 	}
 
 	@Override
 	public boolean equals(Object obj) {
 		if (obj instanceof PojoTypeInfo) {
 			@SuppressWarnings("unchecked")
-			PojoTypeInfo<T> pojoTypeInfo = (PojoTypeInfo<T>)obj;
+			PojoTypeInfo<T> pojoTypeInfo = (PojoTypeInfo<T>) obj;
 
 			return pojoTypeInfo.canEqual(this) &&
 				super.equals(pojoTypeInfo) &&
@@ -337,7 +331,7 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 			return false;
 		}
 	}
-	
+
 	@Override
 	public int hashCode() {
 		return 31 * (31 * Arrays.hashCode(fields) + totalFields) + super.hashCode();
@@ -347,10 +341,10 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 	public boolean canEqual(Object obj) {
 		return obj instanceof PojoTypeInfo;
 	}
-	
+
 	@Override
 	public String toString() {
-		List<String> fieldStrings = new ArrayList<String>();
+		List<String> fieldStrings = new ArrayList<>();
 		for (PojoField field : fields) {
 			fieldStrings.add(field.getField().getName() + ": " + field.getTypeInformation().toString());
 		}
@@ -366,11 +360,10 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 		private ArrayList<TypeComparator> fieldComparators;
 		private ArrayList<Field> keyFields;
 
-		public PojoTypeComparatorBuilder() {
-			fieldComparators = new ArrayList<TypeComparator>();
-			keyFields = new ArrayList<Field>();
+		PojoTypeComparatorBuilder() {
+			fieldComparators = new ArrayList<>();
+			keyFields = new ArrayList<>();
 		}
-
 
 		@Override
 		public void initializeTypeComparatorBuilder(int size) {
@@ -398,14 +391,17 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 				keyFields.size() == fieldComparators.size(),
 				"Number of key fields and field comparators is not equal.");
 
-			return new PojoComparator<T>(
-				keyFields.toArray(new Field[keyFields.size()]),
-				fieldComparators.toArray(new TypeComparator[fieldComparators.size()]),
+			return new PojoComparator<>(
+				keyFields.toArray(new Field[0]),
+				fieldComparators.toArray(new TypeComparator[0]),
 				createSerializer(config),
 				getTypeClass());
 		}
 	}
 
+	/**
+	 * This descriptor contains the name of the field.
+	 */
 	public static class NamedFlatFieldDescriptor extends FlatFieldDescriptor {
 
 		private String fieldName;
@@ -421,7 +417,7 @@ public class PojoTypeInfo<T> extends CompositeType<T> {
 
 		@Override
 		public String toString() {
-			return "NamedFlatFieldDescriptor [name="+fieldName+" position="+getPosition()+" typeInfo="+getType()+"]";
+			return "NamedFlatFieldDescriptor [name=" + fieldName + " position=" + getPosition() + " typeInfo=" + getType() + "]";
 		}
 	}
 }
