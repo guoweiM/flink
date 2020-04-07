@@ -700,7 +700,7 @@ public class TypeExtractor {
 					TypeExtractionUtils.validateLambdaType(baseClass, output);
 				}
 
-				return (TypeInformation<OUT>) new TypeExtractor().createTypeInfo(output, Collections.EMPTY_MAP, Collections.emptyList());
+				return (TypeInformation<OUT>) new TypeExtractor().createTypeInfo(output, Collections.emptyMap(), Collections.emptyList());
 			}
 			else {
 				if (in1Type != null) {
@@ -731,7 +731,7 @@ public class TypeExtractor {
 	}
 
 	public static TypeInformation<?> createTypeInfo(Type t) {
-		TypeInformation<?> ti = new TypeExtractor().createTypeInfo(t, Collections.EMPTY_MAP, Collections.emptyList());
+		TypeInformation<?> ti = new TypeExtractor().createTypeInfo(t, Collections.emptyMap(), Collections.emptyList());
 		if (ti == null) {
 			throw new InvalidTypesException("Could not extract type information.");
 		}
@@ -2116,7 +2116,7 @@ public class TypeExtractor {
 		final TypeInformation<IN2> in2TypeInfo,
 		final int in2Pos) {
 
-		Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings = Collections.EMPTY_MAP;
+		Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings = Collections.emptyMap();
 
 		if (in1TypeInfo == null && in2TypeInfo == null) {
 			return typeVariableBindings;
@@ -2141,7 +2141,7 @@ public class TypeExtractor {
 		if (in2TypeInfo != null) {
 			final Type in2Type = baseClass.getActualTypeArguments()[in2Pos];
 			final Type resolvedIn2Type = resolveTypeFromTypeHierachy(in2Type, functionTypeHierarchy, false);
-			if (typeVariableBindings != Collections.EMPTY_MAP) {
+			if (!typeVariableBindings.equals(Collections.emptyMap())) {
 				typeVariableBindings.putAll(bindTypeVariablesWithTypeInformationFromInput(resolvedIn2Type, in2TypeInfo));
 			}
 		}
