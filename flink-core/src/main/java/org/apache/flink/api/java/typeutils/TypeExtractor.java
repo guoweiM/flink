@@ -781,16 +781,17 @@ public class TypeExtractor {
 
 		final List<Type> typeHierarchy = buildTypeHierarchy(clazz, baseClass);
 
-		final Type baseClassType = resolveTypeFromTypeHierachy(typeHierarchy.get(typeHierarchy.size() - 1), typeHierarchy, false);
-
-		if (!(baseClassType instanceof ParameterizedType)) {
+		if (typeHierarchy.size() < 1) {
 			throw new InvalidTypesException("The types of the interface " + baseClass.getName() + " could not be inferred. " +
 				"Support for synthetic interfaces, lambdas, and generic or raw types is limited at this point");
 		}
 
+		final Type baseClassType = resolveTypeFromTypeHierachy(typeHierarchy.get(typeHierarchy.size() - 1), typeHierarchy, false);
+
 		final Type returnType = ((ParameterizedType) baseClassType).getActualTypeArguments()[returnParamPos];
 
-		final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings = bindTypeVariablesWithTypeInformationFromInputs(clazz, in1Type, 0, in2Type, 1);
+		final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings =
+			bindTypeVariablesWithTypeInformationFromInputs(clazz, Function.class, in1Type, 0, in2Type, 1);
 
 		// return type is a variable -> try to get the type info from the input directly
 		if (returnType instanceof TypeVariable<?>) {
@@ -1943,8 +1944,8 @@ public class TypeExtractor {
 	}
 
 	/**
-	 * Build the type hierarchy from subClass to baseClass..
-	 * @param subClass the begin class of the type hierarchy (excluded)
+	 * Build the parameterized type hierarchy from subClass to baseClass.
+	 * @param subClass the begin class of the type hierarchy
 	 * @param baseClass the end class of the type hierarchy
 	 * @return the type hierarchy.
 	 */
@@ -1960,17 +1961,21 @@ public class TypeExtractor {
 
 		for (Type type : interfaceTypes) {
 			if (baseClass.isAssignableFrom(typeToClass(type))) {
-				List<Type> subTypeHierarchy = buildTypeHierarchy(typeToClass(type), baseClass);
-				typeHierarchy.add(type);
+				final List<Type> subTypeHierarchy = buildTypeHierarchy(typeToClass(type), baseClass);
+				if (type instanceof ParameterizedType) {
+					typeHierarchy.add(type);
+				}
 				typeHierarchy.addAll(subTypeHierarchy);
 				return typeHierarchy;
 			}
 		}
 
 		if (baseClass.isAssignableFrom(subClass)) {
-			Type type = subClass.getGenericSuperclass();
-			List<Type> subTypeHierarchy = buildTypeHierarchy(typeToClass(type), baseClass);
-			typeHierarchy.add(type);
+			final Type type = subClass.getGenericSuperclass();
+			final List<Type> subTypeHierarchy = buildTypeHierarchy(typeToClass(type), baseClass);
+			if (type instanceof ParameterizedType) {
+				typeHierarchy.add(type);
+			}
 			typeHierarchy.addAll(subTypeHierarchy);
 
 			return typeHierarchy;
@@ -2101,6 +2106,7 @@ public class TypeExtractor {
 	/**
 	 * Bind the {@link TypeVariable} with {@link TypeInformation} from the inputs' {@link TypeInformation}.
 	 * @param clazz the sub class
+	 * @param baseClazz the base class
 	 * @param in1TypeInfo the {@link TypeInformation} of the first input
 	 * @param in1Pos the position of type parameter of the first input in a {@link Function} sub class
 	 * @param in2TypeInfo the {@link TypeInformation} of the second input
@@ -2111,6 +2117,7 @@ public class TypeExtractor {
 	 */
 	static <IN1, IN2> Map<TypeVariable<?>, TypeInformation<?>> bindTypeVariablesWithTypeInformationFromInputs(
 		final Class<?> clazz,
+		final Class<?> baseClazz,
 		final TypeInformation<IN1> in1TypeInfo,
 		final int in1Pos,
 		final TypeInformation<IN2> in2TypeInfo,
@@ -2122,13 +2129,11 @@ public class TypeExtractor {
 			return typeVariableBindings;
 		}
 
-		final List<Type> functionTypeHierarchy = buildTypeHierarchy(clazz, Function.class);
+		final List<Type> functionTypeHierarchy = buildTypeHierarchy(clazz, baseClazz);
 
-		if (functionTypeHierarchy.size() <= 1) {
+		if (functionTypeHierarchy.size() < 1) {
 			return typeVariableBindings;
 		}
-
-		functionTypeHierarchy.remove(functionTypeHierarchy.size() - 1);
 
 		final ParameterizedType baseClass = (ParameterizedType) functionTypeHierarchy.get(functionTypeHierarchy.size() - 1);
 
