@@ -80,7 +80,6 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.checkAndExtractLambda;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.getAllDeclaredMethods;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
-import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.sameTypeVars;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
 
 /**
@@ -779,14 +778,14 @@ public class TypeExtractor {
 	private <IN1, IN2, OUT> TypeInformation<OUT> privateCreateTypeInfo(Class<?> baseClass, Class<?> clazz, int returnParamPos,
 			TypeInformation<IN1> in1Type, TypeInformation<IN2> in2Type) {
 
-		final List<Type> typeHierarchy = buildTypeHierarchy(clazz, baseClass);
+		final List<Type> typeHierarchy = TypeExtractionUtils.buildTypeHierarchy(clazz, baseClass);
 
 		if (typeHierarchy.size() < 1) {
 			throw new InvalidTypesException("The types of the interface " + baseClass.getName() + " could not be inferred. " +
 				"Support for synthetic interfaces, lambdas, and generic or raw types is limited at this point");
 		}
 
-		final Type baseClassType = resolveTypeFromTypeHierachy(typeHierarchy.get(typeHierarchy.size() - 1), typeHierarchy, false);
+		final Type baseClassType = TypeExtractionUtils.resolveTypeFromTypeHierachy(typeHierarchy.get(typeHierarchy.size() - 1), typeHierarchy, false);
 
 		final Type returnType = ((ParameterizedType) baseClassType).getActualTypeArguments()[returnParamPos];
 
@@ -816,13 +815,18 @@ public class TypeExtractor {
 			currentExtractingClasses = extractingClasses;
 		}
 
-		// check if type information can be created using a type factory
-		final TypeInformation<OUT> typeFromFactory = createTypeInfoFromFactory(t, typeVariableBindings, currentExtractingClasses);
-		if (typeFromFactory != null) {
-			return typeFromFactory;
+		final List<TypeInformationExtractor<?>> typeInformationExtractors = findTypeInformationExtractors(t);
+
+		if (typeInformationExtractors.size() > 0) {
+			for (int i = 0; i < typeInformationExtractors.size(); i++) {
+				final TypeInformation<OUT> typeInformation = (TypeInformation<OUT>) typeInformationExtractors.get(i).create(t, new TypeInformationExtractorContext(typeVariableBindings, currentExtractingClasses));
+				if (typeInformation != null) {
+					return typeInformation;
+				}
+			}
 		}
 		// check if type is a subclass of tuple
-		else if (isClassType(t) && Tuple.class.isAssignableFrom(typeToClass(t))) {
+		if (isClassType(t) && Tuple.class.isAssignableFrom(typeToClass(t))) {
 			final List<Type> typeHierarchy = new ArrayList<Type>(Arrays.asList(t));
 
 			Type curT = t;
@@ -851,7 +855,7 @@ public class TypeExtractor {
 
 			typeHierarchy.add(curT);
 
-			curT = resolveTypeFromTypeHierachy(curT, typeHierarchy, true);
+			curT = TypeExtractionUtils.resolveTypeFromTypeHierachy(curT, typeHierarchy, true);
 
 			// create the type information for the subtypes
 			final TypeInformation<?>[] subTypesInfo = createSubTypesInfo(t, (ParameterizedType) curT, typeVariableBindings, extractingClasses, false);
@@ -913,7 +917,7 @@ public class TypeExtractor {
 		}
 		// no tuple, no TypeVariable, no generic type
 		else if (t instanceof Class) {
-			return privateGetForClass((Class<OUT>) t, typeVariableBindings, currentExtractingClasses);
+			return (TypeInformation<OUT>) privateGetForClass(typeToClass(t), null, typeVariableBindings, currentExtractingClasses);
 		}
 
 		throw new InvalidTypesException("Type Information could not be created.");
@@ -983,43 +987,6 @@ public class TypeExtractor {
 		}
 
 		return subTypesInfo;
-	}
-
-	/**
-	 * Creates type information using a factory if for this type or super types. Returns null otherwise.
-	 */
-	@SuppressWarnings("unchecked")
-	private <OUT> TypeInformation<OUT> createTypeInfoFromFactory(
-			Type t, Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings, List<Class<?>> extractingClasses) {
-
-		final List<Type> factoryHierarchy = new ArrayList<Type>(Arrays.asList(t));
-		final TypeInfoFactory<? super OUT> factory = getClosestFactory(factoryHierarchy, t);
-		if (factory == null) {
-			return null;
-		}
-		final Type factoryDefiningType = resolveTypeFromTypeHierachy(factoryHierarchy.get(factoryHierarchy.size() - 1), factoryHierarchy, true);
-
-		// infer possible type parameters from input
-		final Map<String, TypeInformation<?>> genericParams;
-		if (factoryDefiningType instanceof ParameterizedType) {
-			genericParams = new HashMap<>();
-			final ParameterizedType paramDefiningType = (ParameterizedType) factoryDefiningType;
-			final Type[] args = typeToClass(paramDefiningType).getTypeParameters();
-
-			final TypeInformation<?>[] subtypeInfo = createSubTypesInfo(t, paramDefiningType, typeVariableBindings, extractingClasses, true);
-			assert subtypeInfo != null;
-			for (int i = 0; i < subtypeInfo.length; i++) {
-				genericParams.put(args[i].toString(), subtypeInfo[i]);
-			}
-		} else {
-			genericParams = Collections.emptyMap();
-		}
-
-		final TypeInformation<OUT> createdTypeInfo = (TypeInformation<OUT>) factory.createTypeInfo(t, genericParams);
-		if (createdTypeInfo == null) {
-			throw new InvalidTypesException("TypeInfoFactory returned invalid TypeInformation 'null'");
-		}
-		return createdTypeInfo;
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -1203,7 +1170,7 @@ public class TypeExtractor {
 					throw new InvalidTypesException("Array type expected.");
 				}
 				if (component instanceof TypeVariable<?>) {
-					component = materializeTypeVariable(typeHierarchy, (TypeVariable<?>) component);
+					component = TypeExtractionUtils.materializeTypeVariable(typeHierarchy, (TypeVariable<?>) component);
 					if (component instanceof TypeVariable) {
 						return;
 					}
@@ -1222,7 +1189,7 @@ public class TypeExtractor {
 				}
 
 				if (component instanceof TypeVariable<?>) {
-					component = materializeTypeVariable(typeHierarchy, (TypeVariable<?>) component);
+					component = TypeExtractionUtils.materializeTypeVariable(typeHierarchy, (TypeVariable<?>) component);
 					if (component instanceof TypeVariable) {
 						return;
 					}
@@ -1247,7 +1214,7 @@ public class TypeExtractor {
 				}
 
 				if (component instanceof TypeVariable<?>) {
-					component = materializeTypeVariable(typeHierarchy, (TypeVariable<?>) component);
+					component = TypeExtractionUtils.materializeTypeVariable(typeHierarchy, (TypeVariable<?>) component);
 					if (component instanceof TypeVariable) {
 						return;
 					}
@@ -1302,7 +1269,7 @@ public class TypeExtractor {
 				validateIfWritable(typeInfo, type);
 			}
 		} else {
-			type = materializeTypeVariable(typeHierarchy, (TypeVariable<?>) type);
+			type = TypeExtractionUtils.materializeTypeVariable(typeHierarchy, (TypeVariable<?>) type);
 			if (!(type instanceof TypeVariable)) {
 				validateInfo(typeHierarchy, type, typeInfo);
 			}
@@ -1401,45 +1368,6 @@ public class TypeExtractor {
 	}
 
 	/**
-	 * Tries to find a concrete value (Class, ParameterizedType etc. ) for a TypeVariable by traversing the type hierarchy downwards.
-	 * If a value could not be found it will return the most bottom type variable in the hierarchy.
-	 */
-	private static Type materializeTypeVariable(List<Type> typeHierarchy, TypeVariable<?> typeVar) {
-		TypeVariable<?> inTypeTypeVar = typeVar;
-		// iterate thru hierarchy from top to bottom until type variable gets a class assigned
-		for (int i = typeHierarchy.size() - 1; i >= 0; i--) {
-			Type curT = typeHierarchy.get(i);
-
-			// parameterized type
-			if (curT instanceof ParameterizedType) {
-				Class<?> rawType = ((Class<?>) ((ParameterizedType) curT).getRawType());
-
-				for (int paramIndex = 0; paramIndex < rawType.getTypeParameters().length; paramIndex++) {
-
-					TypeVariable<?> curVarOfCurT = rawType.getTypeParameters()[paramIndex];
-
-					// check if variable names match
-					if (sameTypeVars(curVarOfCurT, inTypeTypeVar)) {
-						Type curVarType = ((ParameterizedType) curT).getActualTypeArguments()[paramIndex];
-
-						// another type variable level
-						if (curVarType instanceof TypeVariable<?>) {
-							inTypeTypeVar = (TypeVariable<?>) curVarType;
-						}
-						// class
-						else {
-							return curVarType;
-						}
-					}
-				}
-			}
-		}
-		// can not be materialized, most likely due to type erasure
-		// return the type variable of the deepest level
-		return inTypeTypeVar;
-	}
-
-	/**
 	 * Creates type information from a given Class such as Integer, String[] or POJOs.
 	 *
 	 * This method does not support ParameterizedTypes such as Tuples or complex type hierarchies.
@@ -1450,23 +1378,13 @@ public class TypeExtractor {
 	 * @return TypeInformation that describes the passed Class
 	 */
 	public static <X> TypeInformation<X> getForClass(Class<X> clazz) {
-		return new TypeExtractor().privateGetForClass(clazz, Collections.emptyMap(), Collections.emptyList());
-	}
-
-	private <X> TypeInformation<X> privateGetForClass(Class<X> clazz, Map<TypeVariable<?>, TypeInformation<?>>  typeVariableBindings, List<Class<?>> extractingClasses) {
-		return privateGetForClass(clazz, null, typeVariableBindings, extractingClasses);
+		return new TypeExtractor().createTypeInfo(clazz, Collections.emptyMap(), Collections.emptyList());
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private <OUT> TypeInformation<OUT> privateGetForClass(Class<OUT> clazz,
 			ParameterizedType parameterizedType, Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings, List<Class<?>> extractingClasses) {
 		checkNotNull(clazz);
-
-		// check if type information can be produced using a factory
-		final TypeInformation<OUT> typeFromFactory = createTypeInfoFromFactory(clazz, typeVariableBindings, extractingClasses);
-		if (typeFromFactory != null) {
-			return typeFromFactory;
-		}
 
 		// Object is handled as generic type info
 		if (clazz.equals(Object.class)) {
@@ -1594,7 +1512,7 @@ public class TypeExtractor {
 			TypeVariable<?> fieldTypeGeneric = null;
 			if(fieldType instanceof TypeVariable) {
 				fieldTypeGeneric = (TypeVariable<?>) fieldType;
-				fieldType = materializeTypeVariable(typeHierarchy, (TypeVariable<?>)fieldType);
+				fieldType = TypeExtractionUtils.materializeTypeVariable(typeHierarchy, (TypeVariable<?>)fieldType);
 			}
 			for(Method m : clazz.getMethods()) {
 				final String methodNameLow = m.getName().endsWith("_$eq") ?
@@ -1676,7 +1594,7 @@ public class TypeExtractor {
 			try {
 				List<Type> fieldTypeHierarchy = new ArrayList<Type>(typeHierarchy);
 				fieldTypeHierarchy.add(fieldType);
-				Type resolveFeildType = resolveTypeFromTypeHierachy(fieldType, fieldTypeHierarchy, true);
+				Type resolveFeildType = TypeExtractionUtils.resolveTypeFromTypeHierachy(fieldType, fieldTypeHierarchy, true);
 
 				TypeInformation<?> ti = createTypeInfo(resolveFeildType, typeVariableBindings, extractingClasses);
 				pojoFields.add(new PojoField(field, ti));
@@ -1803,12 +1721,14 @@ public class TypeExtractor {
 	private <X> TypeInformation<X> privateGetForObject(X value) {
 		checkNotNull(value);
 
-		// check if type information can be produced using a factory
-		final ArrayList<Type> typeHierarchy = new ArrayList<>();
-		typeHierarchy.add(value.getClass());
-		final TypeInformation<X> typeFromFactory = createTypeInfoFromFactory(value.getClass(), Collections.emptyMap(), Collections.emptyList());
-		if (typeFromFactory != null) {
-			return typeFromFactory;
+		final List<Class<?>> currentExtractingClasses = Arrays.asList(value.getClass());
+
+		final List<Type> typeHierarchy = new ArrayList<>();
+		final TypeInfoFactory<?> typeInfoFactory = getClosestFactory(typeHierarchy, value.getClass());
+		if (typeInfoFactory != null) {
+			final TypeInformationExtractor typeInformationExtractor =
+				new TypeInfoFactoryExtractor(typeInfoFactory, typeHierarchy.get(typeHierarchy.size() - 1));
+			return typeInformationExtractor.create(value.getClass(), new TypeInformationExtractorContext(Collections.emptyMap(), currentExtractingClasses));
 		}
 
 		// check if we can extract the types from tuples, otherwise work with the class
@@ -1817,7 +1737,7 @@ public class TypeExtractor {
 			int numFields = t.getArity();
 			if(numFields != countFieldsInClass(value.getClass())) {
 				// not a tuple since it has more fields.
-				return analyzePojo((Class<X>) value.getClass(), null, Collections.emptyMap(), Collections.emptyList()); // we immediately call analyze Pojo here, because
+				return analyzePojo((Class<X>) value.getClass(), null, Collections.emptyMap(), currentExtractingClasses); // we immediately call analyze Pojo here, because
 				// there is currently no other type that can handle such a class.
 			}
 
@@ -1841,7 +1761,7 @@ public class TypeExtractor {
 				if (row.getField(i) == null) {
 					LOG.warn("Cannot extract type of Row field, because of Row field[" + i + "] is null. " +
 						"Should define RowTypeInfo explicitly.");
-					return privateGetForClass((Class<X>) value.getClass(), Collections.emptyMap(), Collections.emptyList());
+					return createTypeInfo((Class<X>) value.getClass(), Collections.emptyMap(), Collections.emptyList());
 				}
 			}
 			TypeInformation<?>[] typeArray = new TypeInformation<?>[arity];
@@ -1851,7 +1771,7 @@ public class TypeExtractor {
 			return (TypeInformation<X>) new RowTypeInfo(typeArray);
 		}
 		else {
-			return privateGetForClass((Class<X>) value.getClass(), Collections.emptyMap(), Collections.emptyList());
+			return createTypeInfo((Class<X>) value.getClass(), Collections.emptyMap(), Collections.emptyList());
 		}
 	}
 
@@ -1945,72 +1865,6 @@ public class TypeExtractor {
 	}
 
 	/**
-	 * Build the parameterized type hierarchy from subClass to baseClass.
-	 * @param subClass the begin class of the type hierarchy
-	 * @param baseClass the end class of the type hierarchy
-	 * @return the type hierarchy.
-	 */
-	static List<Type> buildTypeHierarchy(final Class<?> subClass, final Class<?> baseClass) {
-
-		final List<Type> typeHierarchy = new ArrayList<>();
-
-		if (baseClass.equals(subClass) || !baseClass.isAssignableFrom(subClass)) {
-			return Collections.emptyList();
-		}
-
-		final Type[] interfaceTypes = subClass.getGenericInterfaces();
-
-		for (Type type : interfaceTypes) {
-			if (baseClass.isAssignableFrom(typeToClass(type))) {
-				final List<Type> subTypeHierarchy = buildTypeHierarchy(typeToClass(type), baseClass);
-				if (type instanceof ParameterizedType) {
-					typeHierarchy.add(type);
-				}
-				typeHierarchy.addAll(subTypeHierarchy);
-				return typeHierarchy;
-			}
-		}
-
-		if (baseClass.isAssignableFrom(subClass)) {
-			final Type type = subClass.getGenericSuperclass();
-			final List<Type> subTypeHierarchy = buildTypeHierarchy(typeToClass(type), baseClass);
-			if (type instanceof ParameterizedType) {
-				typeHierarchy.add(type);
-			}
-			typeHierarchy.addAll(subTypeHierarchy);
-
-			return typeHierarchy;
-		}
-		return typeHierarchy;
-	}
-
-	/**
-	 * Resolve all {@link TypeVariable}s of the type from the type hierarchy.
-	 * @param type the type needed to be resovled
-	 * @param typeHierarchy the set of types which the {@link TypeVariable} could be resovled from.
-	 * @param resolveGenericArray whether to resolve the {@code GenericArrayType} or not. This is for compatible.
-	 *                               (Some code path resolves the component type of a GenericArrayType. Some code path
-	 *                               does not resolve the component type of a GenericArray. A example case is
-	 *                               {@link TypeExtractorTest#testParameterizedArrays()})
-	 * @return resolved type
-	 */
-	static Type resolveTypeFromTypeHierachy(final Type type, final List<Type> typeHierarchy, final boolean resolveGenericArray) {
-		Type resolvedType = type;
-
-		if (type instanceof TypeVariable) {
-			resolvedType = materializeTypeVariable(typeHierarchy, (TypeVariable) type);
-		}
-
-		if (resolvedType instanceof ParameterizedType) {
-			return resolveParameterizedType((ParameterizedType) resolvedType, typeHierarchy, resolveGenericArray);
-		} else if (resolveGenericArray && resolvedType instanceof GenericArrayType) {
-			return resolveGenericArrayType((GenericArrayType) resolvedType, typeHierarchy);
-		}
-
-		return resolvedType;
-	}
-
-	/**
 	 * Resolve all {@link TypeVariable}s of a {@link ParameterizedType}.
 	 * @param parameterizedType the {@link ParameterizedType} needed to be resovled.
 	 * @param typeHierarchy the set of types which the {@link TypeVariable}s could be resolved from.
@@ -2023,7 +1877,7 @@ public class TypeExtractor {
 
 		int i = 0;
 		for (Type type : parameterizedType.getActualTypeArguments()) {
-			actualTypeArguments[i] = resolveTypeFromTypeHierachy(type, typeHierarchy, resolveGenericArray);
+			actualTypeArguments[i] = TypeExtractionUtils.resolveTypeFromTypeHierachy(type, typeHierarchy, resolveGenericArray);
 			i++;
 		}
 
@@ -2041,7 +1895,7 @@ public class TypeExtractor {
 	 */
 	static Type resolveGenericArrayType(final GenericArrayType genericArrayType, final List<Type> typeHierarchy) {
 
-		final Type resolvedComponentType = resolveTypeFromTypeHierachy(genericArrayType.getGenericComponentType(), typeHierarchy, true);
+		final Type resolvedComponentType = TypeExtractionUtils.resolveTypeFromTypeHierachy(genericArrayType.getGenericComponentType(), typeHierarchy, true);
 
 		return new ResolvedGenericArrayType(genericArrayType.getTypeName(), resolvedComponentType);
 	}
@@ -2130,7 +1984,7 @@ public class TypeExtractor {
 			return typeVariableBindings;
 		}
 
-		final List<Type> functionTypeHierarchy = buildTypeHierarchy(clazz, baseClazz);
+		final List<Type> functionTypeHierarchy = TypeExtractionUtils.buildTypeHierarchy(clazz, baseClazz);
 
 		if (functionTypeHierarchy.size() < 1) {
 			return typeVariableBindings;
@@ -2140,13 +1994,13 @@ public class TypeExtractor {
 
 		if (in1TypeInfo != null) {
 			final Type in1Type = baseClass.getActualTypeArguments()[in1Pos];
-			final Type resolvedIn1Type = resolveTypeFromTypeHierachy(in1Type, functionTypeHierarchy, false);
+			final Type resolvedIn1Type = TypeExtractionUtils.resolveTypeFromTypeHierachy(in1Type, functionTypeHierarchy, false);
 			typeVariableBindings = bindTypeVariablesWithTypeInformationFromInput(resolvedIn1Type, in1TypeInfo);
 		}
 
 		if (in2TypeInfo != null) {
 			final Type in2Type = baseClass.getActualTypeArguments()[in2Pos];
-			final Type resolvedIn2Type = resolveTypeFromTypeHierachy(in2Type, functionTypeHierarchy, false);
+			final Type resolvedIn2Type = TypeExtractionUtils.resolveTypeFromTypeHierachy(in2Type, functionTypeHierarchy, false);
 			if (!typeVariableBindings.equals(Collections.emptyMap())) {
 				typeVariableBindings.putAll(bindTypeVariablesWithTypeInformationFromInput(resolvedIn2Type, in2TypeInfo));
 			}
@@ -2167,15 +2021,15 @@ public class TypeExtractor {
 
 		if (factory != null) {
 			final Type factoryDefiningType =
-				resolveTypeFromTypeHierachy(factoryHierarchy.get(factoryHierarchy.size() - 1), factoryHierarchy, true);
+				TypeExtractionUtils.resolveTypeFromTypeHierachy(factoryHierarchy.get(factoryHierarchy.size() - 1), factoryHierarchy, true);
 			return bindTypeVariableFromGenericParameters(factoryDefiningType, inTypeInfo);
 		} else if (inType instanceof GenericArrayType) {
 			return bindTypeVariableFromGenericArray(inType, inTypeInfo);
 		} else if (inTypeInfo instanceof GenericClassAware && isClassType(inType) && ((GenericClassAware) inTypeInfo).getGenericClass().isAssignableFrom(typeToClass(inType))) {
 			final List<Type> typeHierarchy = new ArrayList<Type>(Arrays.asList(inType));
 			final Class<?> genericClass = ((GenericClassAware) inTypeInfo).getGenericClass();
-			typeHierarchy.addAll(buildTypeHierarchy(typeToClass(inType), genericClass));
-			final Type resolvedTupleType = resolveTypeFromTypeHierachy(typeHierarchy.get(typeHierarchy.size() - 1), typeHierarchy, true);
+			typeHierarchy.addAll(TypeExtractionUtils.buildTypeHierarchy(typeToClass(inType), genericClass));
+			final Type resolvedTupleType = TypeExtractionUtils.resolveTypeFromTypeHierachy(typeHierarchy.get(typeHierarchy.size() - 1), typeHierarchy, true);
 
 			return bindTypeVariableFromGenericParameters(resolvedTupleType, inTypeInfo);
 		} else if (inTypeInfo instanceof PojoTypeInfo && isClassType(inType)) {
@@ -2247,11 +2101,82 @@ public class TypeExtractor {
 		List<Field> fields = getAllDeclaredFields(typeToClass(type), false);
 		for (Field field : fields) {
 			final Type fieldType = field.getGenericType();
-			final Type resolvedFieldType =  resolveTypeFromTypeHierachy(fieldType, pojoHierarchy, true);
+			final Type resolvedFieldType =  TypeExtractionUtils.resolveTypeFromTypeHierachy(fieldType, pojoHierarchy, true);
 			final Map sub = bindTypeVariablesWithTypeInformationFromInput(resolvedFieldType, getTypeOfPojoField(typeInformation, field));
 			typeVariableBindings.putAll(sub);
 		}
 
 		return typeVariableBindings;
+	}
+
+
+	private static final Map<Class<?>, TypeInformationExtractor<?>> REGISTERED_TYPEINFORMATION_EXTRACTOR = new HashMap<>();
+
+	class TypeInformationExtractorContext implements TypeInformationExtractor.Context {
+
+		final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings;
+
+		final List<Class<?>> extractingClasses;
+
+		public TypeInformationExtractorContext(
+			final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings,
+			final List<Class<?>> extractingClasses) {
+			this.typeVariableBindings = typeVariableBindings;
+			this.extractingClasses = extractingClasses;
+		}
+
+		@Override
+		public TypeInformation<?> create(Type type) {
+			if (type instanceof TypeVariable) {
+				return typeVariableBindings.get(type);
+			}
+			return new TypeExtractor().createTypeInfo(type, typeVariableBindings, extractingClasses);
+		}
+
+	}
+
+	private List<TypeInformationExtractor<?>> findTypeInformationExtractors(Type type) {
+
+		final List<TypeInformationExtractor<?>> typeInformationExtractors = new ArrayList<>();
+		final Class<?> typeClass;
+
+		if (isClassType(type)) {
+			typeClass = typeToClass(type);
+		} else {
+			return Collections.emptyList();
+		}
+
+		final List<Type> typeHierarchy = new ArrayList<>();
+		final TypeInfoFactory<?> typeInfoFactory = getClosestFactory(typeHierarchy, type);
+		if (typeInfoFactory != null) {
+			final Type factoryType = typeHierarchy.get(typeHierarchy.size() - 1);
+			typeInformationExtractors.add(new TypeInfoFactoryExtractor(typeInfoFactory, factoryType));
+		}
+
+		typeInformationExtractors.addAll(findRegisteredTypeInformationExtractor(typeClass));
+
+		return typeInformationExtractors;
+	}
+
+	private static List<TypeInformationExtractor<?>> findRegisteredTypeInformationExtractor(Class<?> clazz) {
+
+		if (clazz == null || clazz.equals(Object.class)) {
+			return Collections.emptyList();
+		}
+
+		List<TypeInformationExtractor<?>> result = new ArrayList<>();
+
+		TypeInformationExtractor<?> typeInformationExtractor = REGISTERED_TYPEINFORMATION_EXTRACTOR.get(clazz);
+
+		if (typeInformationExtractor != null) {
+			result.add(typeInformationExtractor);
+		}
+
+		result.addAll(findRegisteredTypeInformationExtractor(clazz.getSuperclass()));
+
+		for (Class<?>  c : clazz.getInterfaces()) {
+			result.addAll(findRegisteredTypeInformationExtractor(c));
+		}
+		return result;
 	}
 }
