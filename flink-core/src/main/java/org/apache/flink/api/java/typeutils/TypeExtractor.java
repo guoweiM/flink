@@ -825,56 +825,8 @@ public class TypeExtractor {
 				}
 			}
 		}
-		// check if type is a subclass of tuple
-		if (isClassType(t) && Tuple.class.isAssignableFrom(typeToClass(t))) {
-			final List<Type> typeHierarchy = new ArrayList<Type>(Arrays.asList(t));
 
-			Type curT = t;
-
-			// do not allow usage of Tuple as type
-			if (typeToClass(t).equals(Tuple.class)) {
-				throw new InvalidTypesException(
-						"Usage of class Tuple as a type is not allowed. Use a concrete subclass (e.g. Tuple1, Tuple2, etc.) instead.");
-			}
-
-			// go up the hierarchy until we reach immediate child of Tuple (with or without generics)
-			// collect the types while moving up for a later top-down
-			while (!(isClassType(curT) && typeToClass(curT).getSuperclass().equals(Tuple.class))) {
-				typeHierarchy.add(curT);
-				curT = typeToClass(curT).getGenericSuperclass();
-			}
-
-			if(curT == Tuple0.class) {
-				return new TupleTypeInfo(Tuple0.class);
-			}
-
-			// check if immediate child of Tuple has generics
-			if (curT instanceof Class<?>) {
-				throw new InvalidTypesException("Tuple needs to be parameterized by using generics.");
-			}
-
-			typeHierarchy.add(curT);
-
-			curT = TypeExtractionUtils.resolveTypeFromTypeHierachy(curT, typeHierarchy, true);
-
-			// create the type information for the subtypes
-			final TypeInformation<?>[] subTypesInfo = createSubTypesInfo(t, (ParameterizedType) curT, typeVariableBindings, extractingClasses, false);
-			// type needs to be treated a pojo due to additional fields
-			if (subTypesInfo == null) {
-				if (t instanceof ParameterizedType) {
-					return (TypeInformation<OUT>) analyzePojo(typeToClass(t), (ParameterizedType) t, typeVariableBindings, extractingClasses);
-				}
-				else {
-					return (TypeInformation<OUT>) analyzePojo(typeToClass(t), null, typeVariableBindings, extractingClasses);
-				}
-			}
-			// return tuple info
-			return new TupleTypeInfo(typeToClass(t), subTypesInfo);
-
-		}
-		// type depends on another type
-		// e.g. class MyMapper<E> extends MapFunction<String, E>
-		else if (t instanceof TypeVariable) {
+		if (t instanceof TypeVariable) {
 			final TypeInformation<OUT> typeInfo = (TypeInformation<OUT>) typeVariableBindings.get(t);
 			if (typeInfo != null) {
 				return typeInfo;
@@ -921,72 +873,6 @@ public class TypeExtractor {
 		}
 
 		throw new InvalidTypesException("Type Information could not be created.");
-	}
-
-	/**
-	 * Creates the TypeInformation for all elements of a type that expects a certain number of
-	 * subtypes (e.g. TupleXX).
-	 *
-	 * @param originalType most concrete subclass
-	 * @param definingType type that defines the number of subtypes (e.g. Tuple2 -> 2 subtypes)
-	 * @param typeVariableBindings the mapping relation between the type variable and the typein formation
-	 * @param extractingClasses the classes that are extrating the type information
-	 * @param lenient decides whether exceptions should be thrown if a subtype can not be determined
-	 * @return array containing TypeInformation of sub types or null if definingType contains
-	 *     more subtypes (fields) that defined
-	 */
-	private TypeInformation<?>[] createSubTypesInfo(Type originalType, ParameterizedType definingType,
-			Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings, List<Class<?>> extractingClasses, boolean lenient) {
-
-		final int typeArgumentsLength = definingType.getActualTypeArguments().length;
-		final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
-		for (int i = 0; i < typeArgumentsLength; i++) {
-			final Type acutalTypeArgument = definingType.getActualTypeArguments()[i];
-			// sub type could not be determined with materializing
-			// try to derive the type info of the TypeVariable from the immediate base child input as a last attempt
-			if (acutalTypeArgument instanceof TypeVariable<?>) {
-				subTypesInfo[i] = typeVariableBindings.get(acutalTypeArgument);
-
-				// variable could not be determined
-				if (subTypesInfo[i] == null && !lenient) {
-					throw new InvalidTypesException("Type of TypeVariable '" + ((TypeVariable<?>) acutalTypeArgument).getName() + "' in '"
-						+ ((TypeVariable<?>) acutalTypeArgument).getGenericDeclaration()
-						+ "' could not be determined. This is most likely a type erasure problem. "
-						+ "The type extraction currently supports types with generic variables only in cases where "
-						+ "all variables in the return type can be deduced from the input type(s). "
-						+ "Otherwise the type has to be specified explicitly using type information.");
-				}
-			} else {
-				// create the type information of the subtype or null/exception
-				try {
-					subTypesInfo[i] = createTypeInfo(acutalTypeArgument, typeVariableBindings, extractingClasses);
-				} catch (InvalidTypesException e) {
-					if (lenient) {
-						subTypesInfo[i] = null;
-					} else {
-						throw e;
-					}
-				}
-			}
-		}
-
-		// check that number of fields matches the number of subtypes
-		if (!lenient) {
-			Class<?> originalTypeAsClass = null;
-			if (isClassType(originalType)) {
-				originalTypeAsClass = typeToClass(originalType);
-			}
-			checkNotNull(originalTypeAsClass, "originalType has an unexpected type");
-			// check if the class we assumed to conform to the defining type so far is actually a pojo because the
-			// original type contains additional fields.
-			// check for additional fields.
-			int fieldCount = countFieldsInClass(originalTypeAsClass);
-			if(fieldCount > subTypesInfo.length) {
-				return null;
-			}
-		}
-
-		return subTypesInfo;
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -1355,18 +1241,6 @@ public class TypeExtractor {
 		return factory;
 	}
 
-	private int countFieldsInClass(Class<?> clazz) {
-		int fieldCount = 0;
-		for(Field field : clazz.getFields()) { // get all fields
-			if(	!Modifier.isStatic(field.getModifiers()) &&
-				!Modifier.isTransient(field.getModifiers())
-				) {
-				fieldCount++;
-			}
-		}
-		return fieldCount;
-	}
-
 	/**
 	 * Creates type information from a given Class such as Integer, String[] or POJOs.
 	 *
@@ -1448,14 +1322,6 @@ public class TypeExtractor {
 		if (Value.class.isAssignableFrom(clazz)) {
 			Class<? extends Value> valueClass = clazz.asSubclass(Value.class);
 			return (TypeInformation<OUT>) ValueTypeInfo.getValueTypeInfo(valueClass);
-		}
-
-		// check for subclasses of Tuple
-		if (Tuple.class.isAssignableFrom(clazz)) {
-			if(clazz == Tuple0.class) {
-				return new TupleTypeInfo(Tuple0.class);
-			}
-			throw new InvalidTypesException("Type information extraction for tuples (except Tuple0) cannot be done based on the class.");
 		}
 
 		// check for Enums
@@ -1735,7 +1601,7 @@ public class TypeExtractor {
 		if (value instanceof Tuple) {
 			Tuple t = (Tuple) value;
 			int numFields = t.getArity();
-			if(numFields != countFieldsInClass(value.getClass())) {
+			if(numFields != TypeExtractionUtils.countFieldsInClass(value.getClass())) {
 				// not a tuple since it has more fields.
 				return analyzePojo((Class<X>) value.getClass(), null, Collections.emptyMap(), currentExtractingClasses); // we immediately call analyze Pojo here, because
 				// there is currently no other type that can handle such a class.
@@ -2111,6 +1977,10 @@ public class TypeExtractor {
 
 
 	private static final Map<Class<?>, TypeInformationExtractor<?>> REGISTERED_TYPEINFORMATION_EXTRACTOR = new HashMap<>();
+
+	static {
+		REGISTERED_TYPEINFORMATION_EXTRACTOR.put(Tuple.class, new TupleTypeInfoExtractor<>());
+	}
 
 	class TypeInformationExtractorContext implements TypeInformationExtractor.Context {
 

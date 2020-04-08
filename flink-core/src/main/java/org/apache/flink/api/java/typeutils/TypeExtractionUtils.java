@@ -25,6 +25,7 @@ import org.apache.flink.api.common.functions.InvalidTypesException;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -455,5 +456,15 @@ public class TypeExtractionUtils {
 		// can not be materialized, most likely due to type erasure
 		// return the type variable of the deepest level
 		return inTypeTypeVar;
+	}
+
+	static int countFieldsInClass(Class<?> clazz) {
+		int fieldCount = 0;
+		for (Field field : clazz.getFields()) { // get all fields
+			if (!Modifier.isStatic(field.getModifiers()) && !Modifier.isTransient(field.getModifiers())) {
+				fieldCount++;
+			}
+		}
+		return fieldCount;
 	}
 }
