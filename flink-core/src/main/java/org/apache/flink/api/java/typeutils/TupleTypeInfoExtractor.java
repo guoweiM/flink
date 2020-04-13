@@ -83,7 +83,7 @@ public class TupleTypeInfoExtractor<T extends Tuple> implements TypeInformationE
 		final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
 		for (int i = 0; i < typeArgumentsLength; i++) {
 			final Type actualTypeArgument = definingType.getActualTypeArguments()[i];
-			subTypesInfo[i] = context.create(actualTypeArgument);
+			subTypesInfo[i] = context.create(actualTypeArgument, false);
 
 			if (subTypesInfo[i] == null && actualTypeArgument instanceof TypeVariable) {
 				throw new InvalidTypesException("Type of TypeVariable '" + ((TypeVariable<?>) actualTypeArgument).getName() + "' in '"

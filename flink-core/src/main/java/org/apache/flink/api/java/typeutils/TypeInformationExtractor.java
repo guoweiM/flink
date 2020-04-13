@@ -50,8 +50,9 @@ public interface TypeInformationExtractor<T> {
 		/**
 		 * Create the {@link TypeInformation} for the give type.
 		 * @param type the type needed to create the {@link TypeInformation}
+		 * @param genericForRecursiveType return the {@link GenericTypeInfo} if the type is already extracting.
 		 * @return the {@link TypeInformation} of the given type
 		 */
-		TypeInformation<?> create(Type type);
+		TypeInformation<?> create(Type type, Boolean genericForRecursiveType);
 	}
 }

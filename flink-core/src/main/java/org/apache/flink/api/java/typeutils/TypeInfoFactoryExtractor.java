@@ -74,9 +74,9 @@ public class TypeInfoFactoryExtractor<T> implements TypeInformationExtractor<T> 
 		final int typeArgumentsLength = definingType.getActualTypeArguments().length;
 		final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
 		for (int i = 0; i < typeArgumentsLength; i++) {
-			final Type acutalTypeArgument = definingType.getActualTypeArguments()[i];
+			final Type actualTypeArgument = definingType.getActualTypeArguments()[i];
 			try {
-				subTypesInfo[i] = context.create(acutalTypeArgument);
+				subTypesInfo[i] = context.create(actualTypeArgument, false);
 			} catch (InvalidTypesException e) {
 				subTypesInfo[i] = null;
 			}
