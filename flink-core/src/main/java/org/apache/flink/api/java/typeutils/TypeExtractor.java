@@ -41,9 +41,9 @@ import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.typeutils.TypeExtractionUtils.LambdaExecutable;
 import org.apache.flink.util.Preconditions;
 
-import javax.annotation.Nonnull;
-
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -54,6 +54,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.checkAndExtractLambda;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
@@ -73,6 +76,9 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  */
 @Public
 public class TypeExtractor {
+
+	private static final String HADOOP_WRITABLE_TYPEINFO_CLASS = "org.apache.flink.api.java.typeutils.WritableTypeInfo";
+
 
 	/*
 	 * NOTE: Most methods of the TypeExtractor work with a so-called "typeHierarchy".
@@ -721,7 +727,7 @@ public class TypeExtractor {
 	}
 
 	public static TypeInformation<?> createTypeInfo(Type t) {
-		return extract(t, Collections.emptyMap(), Collections.emptyList());
+		return extract(t, Collections.emptyMap());
 	}
 
 	/**
@@ -762,52 +768,6 @@ public class TypeExtractor {
 	}
 
 	/**
-	 * Extracting the {@link TypeInformation} for the given type.
-	 * @param type the type needed to extract {@link TypeInformation}
-	 * @param typeVariableBindings contains mapping relation between {@link TypeVariable} and {@link TypeInformation}. This
-	 *                             is used to extract the {@link TypeInformation} for {@link TypeVariable}.
-	 * @param extractingClasses contains the classes that type extractor stack is extracting for {@link TypeInformation}.
-	 *                             This is used to check whether there is a recursive type.
-	 * @return the {@link TypeInformation} of the given type
-	 * @throws InvalidTypesException if cant handle the given type
-	 */
-	@PublicEvolving
-	@SuppressWarnings({ "unchecked"})
-	@Nonnull
-	static TypeInformation<?> extract(
-		final Type type,
-		final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings,
-		final List<Class<?>> extractingClasses) {
-
-		final List<Class<?>> currentExtractingClasses;
-		if (isClassType(type)) {
-			currentExtractingClasses = new ArrayList(extractingClasses);
-			currentExtractingClasses.add(typeToClass(type));
-		} else {
-			currentExtractingClasses = extractingClasses;
-		}
-
-		TypeInformation<?> typeInformation;
-
-		if ((typeInformation = AvroTypeExtractorChecker.extract(type)) != null) {
-			return typeInformation;
-		}
-
-		if ((typeInformation = HadoopWritableExtractorChecker.extract(type)) != null) {
-			return typeInformation;
-		}
-
-		if ((typeInformation = TupleTypeExtractor.extract(type, typeVariableBindings, currentExtractingClasses)) != null) {
-			return typeInformation;
-		}
-
-		if ((typeInformation = DefaultExtractor.extract(type, typeVariableBindings, currentExtractingClasses)) != null) {
-			return typeInformation;
-		}
-		throw new InvalidTypesException("Type Information could not be created.");
-	}
-
-	/**
 	 * Creates type information from a given Class such as Integer, String[] or POJOs.
 	 *
 	 * <p>This method does not support ParameterizedTypes such as Tuples or complex type hierarchies.
@@ -828,20 +788,15 @@ public class TypeExtractor {
 	public static <X> TypeInformation<X> getForObject(X value) {
 		checkNotNull(value);
 
-		TypeInformation<X> typeInformation;
-		if ((typeInformation = (TypeInformation<X>) TypeInfoFactoryExtractor.extract(value.getClass(), Collections.emptyMap(), Collections.emptyList())) != null) {
-			return typeInformation;
-		}
-
-		if ((typeInformation = (TypeInformation<X>) TupleTypeExtractor.extract(value)) != null) {
-			return typeInformation;
-		}
-
-		if ((typeInformation = (TypeInformation<X>) RowTypeExtractor.extract(value)) != null) {
-			return typeInformation;
-		}
-
-		return (TypeInformation<X>) createTypeInfo(value.getClass());
+		return (TypeInformation<X>) Stream.<Supplier<Optional<TypeInformation<?>>>>of(
+			() -> TypeInfoFactoryExtractor.INSTANCE.extract(value.getClass(), TypeInfoExtractContext.CONTEXT),
+			() -> TupleTypeInfoExtractor.extract(value),
+			() -> RowTypeExtractor.extract(value))
+			.map(Supplier::get)
+			.filter(Optional::isPresent)
+			.<TypeInformation<?>>map(Optional::get)
+			.findFirst()
+			.orElseGet(() -> createTypeInfo(value.getClass()));
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -932,7 +887,6 @@ public class TypeExtractor {
 
 	// ----------------------------------- private methods ----------------------------------------
 
-	@SuppressWarnings("unchecked")
 	private static TypeInformation<?> privateCreateTypeInfo(
 		final Class<?> baseClass,
 		final Class<?> clazz,
@@ -964,6 +918,44 @@ public class TypeExtractor {
 			final Type resolvedIn2Type = resolveTypeFromTypeHierarchy(in2Type, functionTypeHierarchy, false);
 			typeVariableBindings.putAll(TypeVariableBinder.bindTypeVariables(resolvedIn2Type, in2TypeInfo));
 		}
-		return extract(returnType, typeVariableBindings, Collections.emptyList());
+		return extract(returnType, typeVariableBindings);
+	}
+
+	private static TypeInformation<?> extract(final Type type, final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings) {
+		final List<Class<?>> currentExtractingClasses = isClassType(type) ? Collections.singletonList(typeToClass(type)) : Collections.emptyList();
+
+		return TypeExtractionUtils.extract(type, new TypeInfoExtractContext(typeVariableBindings, currentExtractingClasses));
+	}
+
+	/**
+	 * TODO:: we should remove the method.
+	 */
+	// visible for testing
+	@Deprecated
+	public static <T> TypeInformation<T> createHadoopWritableTypeInfo(Class<T> clazz) {
+		checkNotNull(clazz);
+
+		Class<?> typeInfoClass;
+		try {
+			typeInfoClass = Class.forName(HADOOP_WRITABLE_TYPEINFO_CLASS, false, Thread.currentThread().getContextClassLoader());
+		}
+		catch (ClassNotFoundException e) {
+			throw new RuntimeException("Could not load the TypeInformation for the class '"
+				+ TypeExtractionUtils.HADOOP_WRITABLE_CLASS + "'. You may be missing the 'flink-hadoop-compatibility' dependency.");
+		}
+
+		try {
+			Constructor<?> constr = typeInfoClass.getConstructor(Class.class);
+
+			@SuppressWarnings("unchecked")
+			TypeInformation<T> typeInfo = (TypeInformation<T>) constr.newInstance(clazz);
+			return typeInfo;
+		}
+		catch (NoSuchMethodException | IllegalAccessException | InstantiationException e) {
+			throw new RuntimeException("Incompatible versions of the Hadoop Compatibility classes found.");
+		}
+		catch (InvocationTargetException e) {
+			throw new RuntimeException("Cannot create Hadoop WritableTypeInfo.", e.getTargetException());
+		}
 	}
 }

@@ -19,8 +19,10 @@
 package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.common.functions.InvalidTypesException;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Array;
@@ -33,16 +35,57 @@ import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 
+import static org.apache.flink.api.java.typeutils.TypeInformationExtractorFinder.findTypeInfoExtractor;
 import static org.apache.flink.shaded.asm7.org.objectweb.asm.Type.getConstructorDescriptor;
 import static org.apache.flink.shaded.asm7.org.objectweb.asm.Type.getMethodDescriptor;
 
+/**
+ * The utils for type information extraction.
+ */
 @Internal
 public class TypeExtractionUtils {
 
+	public static final String HADOOP_WRITABLE_CLASS = "org.apache.hadoop.io.Writable";
+
+	private static final String AVRO_SPECIFIC_RECORD_BASE_CLASS = "org.apache.avro.specific.SpecificRecordBase";
+
 	private TypeExtractionUtils() {
 		// do not allow instantiation
+	}
+
+	@VisibleForTesting
+	static boolean isHadoopWritable(Class<?> typeClass) {
+		// check if this is directly the writable interface
+		if (typeClass.getName().equals(HADOOP_WRITABLE_CLASS)) {
+			return false;
+		}
+
+		final HashSet<Class<?>> alreadySeen = new HashSet<>();
+		alreadySeen.add(typeClass);
+		return hasHadoopWritableInterface(typeClass, alreadySeen);
+	}
+
+	public static boolean isAvroType(Class<?> typeClass) {
+		return hasSuperclass(typeClass, AVRO_SPECIFIC_RECORD_BASE_CLASS);
+	}
+
+	private static boolean hasHadoopWritableInterface(Class<?> clazz, HashSet<Class<?>> alreadySeen) {
+		Class<?>[] interfaces = clazz.getInterfaces();
+		for (Class<?> c : interfaces) {
+			if (c.getName().equals(HADOOP_WRITABLE_CLASS)) {
+				return true;
+			}
+			else if (alreadySeen.add(c) && hasHadoopWritableInterface(c, alreadySeen)) {
+				return true;
+			}
+		}
+
+		Class<?> superclass = clazz.getSuperclass();
+		return superclass != null && alreadySeen.add(superclass) && hasHadoopWritableInterface(superclass, alreadySeen);
 	}
 
 	/**
@@ -259,7 +302,7 @@ public class TypeExtractionUtils {
 	 */
 	public static Class<?> typeToClass(Type t) {
 		if (t instanceof Class) {
-			return (Class<?>)t;
+			return (Class<?>) t;
 		}
 		else if (t instanceof ParameterizedType) {
 			return ((Class<?>) ((ParameterizedType) t).getRawType());
@@ -350,5 +393,23 @@ public class TypeExtractionUtils {
 				+ "An easy workaround is to use an (anonymous) class instead that implements the '" + baseClass.getName() + "' interface. "
 				+ "Otherwise the type has to be specified explicitly using type information.");
 		}
+	}
+
+	/**
+	 * This method finds all the extractor candidates that might handle the given type and return result of first extractor
+	 * that could extract the {@link TypeInformation} of given type.
+	 * @param type the type needed to extract {@link TypeInformation}
+	 * @param context the context used by the extractors
+	 * @return {@link TypeInformation} of the given type
+	 * @throws InvalidTypesException if no extractor could handle the type.
+	 */
+	static TypeInformation<?> extract(final Type type, final TypeInformationExtractor.Context context) {
+		return findTypeInfoExtractor(type)
+			.stream()
+			.map(e -> e.extract(type, context))
+			.filter(Optional::isPresent)
+			.map(Optional::get)
+			.findFirst()
+			.orElseThrow(() -> new InvalidTypesException("Type Information could not be created."));
 	}
 }

@@ -26,47 +26,37 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.util.InstantiationUtil;
 
-import javax.annotation.Nullable;
-
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
 import static org.apache.flink.api.java.typeutils.TypeResolver.resolveTypeFromTypeHierarchy;
-import static org.apache.flink.api.java.typeutils.TypeVariableBinder.bindTypeVariableFromGenericParameters;
 
 /**
  * This class is used to extract the {@link org.apache.flink.api.common.typeinfo.TypeInformation} of the class that has
  * the {@link org.apache.flink.api.common.typeinfo.TypeInfo} annotation.
  */
-public class TypeInfoFactoryExtractor {
+public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformationExtractor {
 
+	public static final TypeInfoFactoryExtractor INSTANCE = new TypeInfoFactoryExtractor();
 	/**
 	 * Extract {@link TypeInformation} for the type that has {@link TypeInfo} annotation.
 	 * @param type  the type needed to extract {@link TypeInformation}
-	 * @param typeVariableBindings contains mapping relation between {@link TypeVariable} and {@link TypeInformation}. This
-	 *                             is used to extract the {@link TypeInformation} for {@link TypeVariable}.
-	 * @param extractingClasses contains the classes that type extractor stack is extracting for {@link TypeInformation}.
-	 *                             This is used to check whether there is a recursive type.
-	 * @return the {@link TypeInformation} of the given type or {@code null} if the type does not have the annotation
+	 * @param context used to extract the {@link TypeInformation} for the generic parameters or components.
+	 * @return the {@link TypeInformation} of the given type or {@link Optional#empty()} if the type does not have the annotation
 	 * @throws InvalidTypesException if the factory does not create a valid {@link TypeInformation} or if creating generic type failed
 	 */
-	@Nullable
-	static TypeInformation<?> extract(
-		final Type type,
-		final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings,
-		final List<Class<?>> extractingClasses) {
-
+	public Optional<TypeInformation<?>> extract(final Type type, final TypeInformationExtractor.Context context) {
 		final Tuple3<Type, List<ParameterizedType>, TypeInfoFactory<?>> result = buildTypeHierarchy(type);
 
 		if (result == null) {
-			return null;
+			return Optional.empty();
 		}
 
 		final Type resolvedFactoryDefiningType = resolveTypeFromTypeHierarchy(result.f0, result.f1, true);
@@ -79,14 +69,8 @@ public class TypeInfoFactoryExtractor {
 			final Type[] genericTypes = ((ParameterizedType) resolvedFactoryDefiningType).getActualTypeArguments();
 			final Type[] args = typeToClass(resolvedFactoryDefiningType).getTypeParameters();
 			for (int i = 0; i < genericTypes.length; i++) {
-				try {
-					genericParams.put(
-						args[i].toString(),
-						TypeExtractor.extract(genericTypes[i], typeVariableBindings, extractingClasses));
-				} catch (InvalidTypesException e) {
-					//TODO:: this is in-consistent behavior when Tuple or TypeInfoFactory fail
-					genericParams.put(args[i].toString(), null);
-				}
+				// the user should deal exception
+				genericParams.put(args[i].toString(), context.extract(genericTypes[i]));
 			}
 		} else {
 			genericParams = Collections.emptyMap();
@@ -96,32 +80,7 @@ public class TypeInfoFactoryExtractor {
 		if (createdTypeInfo == null) {
 			throw new InvalidTypesException("TypeInfoFactory returned invalid TypeInformation 'null'");
 		}
-		return createdTypeInfo;
-	}
-
-	/**
-	 * Infer {@link TypeInformation} of {@link TypeVariable} in the give resolved type from {@link TypeInformation} that
-	 * is created from {@link TypeInfoFactory}.
-	 * @param type the resolved type
-	 * @param typeInformation the type information of the given type
-	 * @return the mapping relation between the {@link TypeVariable} and {@link TypeInformation} or{@code null} if the typeInformation
-	 * is not created from the {@link TypeInfoFactory}
-	 */
-	@Nullable
-	static Map<TypeVariable<?>, TypeInformation<?>> bindTypeVariables(final Type type, final TypeInformation<?> typeInformation) {
-
-		final Tuple3<Type, List<ParameterizedType>, TypeInfoFactory<?>> result = buildTypeHierarchy(type);
-
-		if (result == null) {
-			return null;
-		}
-		if (result.f0 instanceof ParameterizedType) {
-			final ParameterizedType resolvedFactoryDefiningType =
-				(ParameterizedType) resolveTypeFromTypeHierarchy(result.f0, result.f1, true);
-			return bindTypeVariableFromGenericParameters(resolvedFactoryDefiningType, typeInformation);
-		} else {
-			return Collections.emptyMap();
-		}
+		return Optional.of(createdTypeInfo);
 	}
 
 	/**
@@ -145,7 +104,7 @@ public class TypeInfoFactoryExtractor {
 		return (TypeInfoFactory<X>) InstantiationUtil.instantiate(factoryClass);
 	}
 
-	private static Tuple3<Type, List<ParameterizedType>, TypeInfoFactory<?>> buildTypeHierarchy(final Type type) {
+	static Tuple3<Type, List<ParameterizedType>, TypeInfoFactory<?>> buildTypeHierarchy(final Type type) {
 
 		if (!isClassType(type)) {
 			return null;

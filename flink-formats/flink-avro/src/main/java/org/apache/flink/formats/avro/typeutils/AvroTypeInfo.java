@@ -24,14 +24,14 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.typeutils.GenericTypeInfo;
 import org.apache.flink.api.java.typeutils.PojoField;
-import org.apache.flink.api.java.typeutils.PojoTypeExtractor;
 import org.apache.flink.api.java.typeutils.PojoTypeInfo;
+import org.apache.flink.api.java.typeutils.PojoTypeInfoExtractor;
 
 import org.apache.avro.specific.SpecificRecordBase;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Special type information to generate a special AvroTypeInfo for Avro POJOs (implementing SpecificRecordBase, the typed Avro POJOs)
@@ -64,12 +64,12 @@ public class AvroTypeInfo<T extends SpecificRecordBase> extends PojoTypeInfo<T> 
 	@SuppressWarnings("unchecked")
 	@Internal
 	private static <T extends SpecificRecordBase> List<PojoField> generateFieldsFromAvroSchema(Class<T> typeClass) {
-			final TypeInformation ti = PojoTypeExtractor.extract(typeClass, Collections.emptyMap(), Collections.emptyList());
+			final Optional<TypeInformation<?>> ti = PojoTypeInfoExtractor.extract(typeClass);
 
-			if ((ti != null) && !(ti instanceof PojoTypeInfo)) {
+			if ((!ti.isPresent()) || !(ti.get() instanceof PojoTypeInfo)) {
 				throw new IllegalStateException("Expecting type to be a PojoTypeInfo");
 			}
-			PojoTypeInfo pti =  (PojoTypeInfo) ti;
+			PojoTypeInfo pti =  (PojoTypeInfo) ti.get();
 			List<PojoField> newFields = new ArrayList<>(pti.getTotalFields());
 
 			for (int i = 0; i < pti.getArity(); i++) {

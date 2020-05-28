@@ -18,7 +18,6 @@
 
 package org.apache.flink.api.java.typeutils;
 
-import org.apache.flink.api.common.functions.InvalidTypesException;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
@@ -45,31 +44,31 @@ public class WritableExtractionTest {
 	@Test
 	public void testDetectWritable() {
 		// writable interface itself must not be writable
-		assertFalse(HadoopWritableExtractorChecker.isHadoopWritable(Writable.class));
+		assertFalse(TypeExtractionUtils.isHadoopWritable(Writable.class));
 
 		// various forms of extension
-		assertTrue(HadoopWritableExtractorChecker.isHadoopWritable(DirectWritable.class));
-		assertTrue(HadoopWritableExtractorChecker.isHadoopWritable(ViaInterfaceExtension.class));
-		assertTrue(HadoopWritableExtractorChecker.isHadoopWritable(ViaAbstractClassExtension.class));
+		assertTrue(TypeExtractionUtils.isHadoopWritable(DirectWritable.class));
+		assertTrue(TypeExtractionUtils.isHadoopWritable(ViaInterfaceExtension.class));
+		assertTrue(TypeExtractionUtils.isHadoopWritable(ViaAbstractClassExtension.class));
 
 		// some non-writables
-		assertFalse(HadoopWritableExtractorChecker.isHadoopWritable(String.class));
-		assertFalse(HadoopWritableExtractorChecker.isHadoopWritable(List.class));
-		assertFalse(HadoopWritableExtractorChecker.isHadoopWritable(WritableComparator.class));
+		assertFalse(TypeExtractionUtils.isHadoopWritable(String.class));
+		assertFalse(TypeExtractionUtils.isHadoopWritable(List.class));
+		assertFalse(TypeExtractionUtils.isHadoopWritable(WritableComparator.class));
 	}
 
 	@Test
 	public void testCreateWritableInfo() {
 		TypeInformation<DirectWritable> info1 =
-				HadoopWritableExtractorChecker.createHadoopWritableTypeInfo(DirectWritable.class);
+				HadoopWritableExtractor.createHadoopWritableTypeInfo(DirectWritable.class);
 		assertEquals(DirectWritable.class, info1.getTypeClass());
 
 		TypeInformation<ViaInterfaceExtension> info2 =
-				HadoopWritableExtractorChecker.createHadoopWritableTypeInfo(ViaInterfaceExtension.class);
+				HadoopWritableExtractor.createHadoopWritableTypeInfo(ViaInterfaceExtension.class);
 		assertEquals(ViaInterfaceExtension.class, info2.getTypeClass());
 
 		TypeInformation<ViaAbstractClassExtension> info3 =
-				HadoopWritableExtractorChecker.createHadoopWritableTypeInfo(ViaAbstractClassExtension.class);
+				HadoopWritableExtractor.createHadoopWritableTypeInfo(ViaAbstractClassExtension.class);
 		assertEquals(ViaAbstractClassExtension.class, info3.getTypeClass());
 	}
 
@@ -111,29 +110,6 @@ public class WritableExtractionTest {
 		}
 
 		assertTrue("missed the writable type", foundWritable);
-	}
-
-	@Test
-	public void testInputValidationError() {
-
-		RichMapFunction<Writable, String> function = new RichMapFunction<Writable, String>() {
-			@Override
-			public String map(Writable value) throws Exception {
-				return null;
-			}
-		};
-
-		@SuppressWarnings("unchecked")
-		TypeInformation<Writable> inType =
-				(TypeInformation<Writable>) (TypeInformation<?>) new WritableTypeInfo<>(DirectWritable.class);
-
-		try {
-			TypeExtractor.getMapReturnTypes(function, inType);
-			fail("exception expected");
-		}
-		catch (InvalidTypesException e) {
-			// right
-		}
 	}
 
 	// ------------------------------------------------------------------------

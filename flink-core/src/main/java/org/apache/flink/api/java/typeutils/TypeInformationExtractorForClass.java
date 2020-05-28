@@ -20,35 +20,24 @@ package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
-import javax.annotation.Nullable;
-
 import java.lang.reflect.Type;
+import java.util.Optional;
 
-import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.hasSuperclass;
-import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
 
 /**
- * See {@link HadoopWritableExtractorChecker}.
- * TODO:: maybe we could deprecate the {@link AvroUtils}.
+ * The extractor extends this class extract the type information of non generic parameter class and also does not need to
+ * extract the field's type information.
  */
-class AvroTypeExtractorChecker {
+public abstract class TypeInformationExtractorForClass implements TypeInformationExtractor {
 
-	private static final String AVRO_SPECIFIC_RECORD_BASE_CLASS = "org.apache.avro.specific.SpecificRecordBase";
+	public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
 
-
-	// ------------------------------------------------------------------------
-	//  Extract TypeInformation for Avro
-	// ------------------------------------------------------------------------
-
-	@Nullable
-	static TypeInformation<?> extract(final Type type) {
-		if (isClassType(type)) {
-			final Class<?> clazz = typeToClass(type);
-			if (hasSuperclass(clazz, AVRO_SPECIFIC_RECORD_BASE_CLASS)) {
-				return AvroUtils.getAvroUtils().createAvroTypeInfo(clazz);
-			}
+		if (!(type instanceof Class)) {
+			return Optional.empty();
 		}
-		return null;
+		return extract(typeToClass(type));
 	}
+
+	public abstract Optional<TypeInformation<?>> extract(final Class<?> clazz);
 }

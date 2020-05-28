@@ -23,16 +23,13 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple0;
 
-import javax.annotation.Nullable;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
@@ -40,29 +37,30 @@ import static org.apache.flink.api.java.typeutils.TypeExtractor.getForObject;
 import static org.apache.flink.api.java.typeutils.TypeHierarchyBuilder.buildParameterizedTypeHierarchy;
 import static org.apache.flink.api.java.typeutils.TypeResolver.resolveTypeFromTypeHierarchy;
 
-class TupleTypeExtractor {
+/**
+ * This class is used to extract {@link TupleTypeInfo}.
+ */
+public class TupleTypeInfoExtractor implements TypeInformationExtractor {
+
+	@Override
+	public List<Class<?>> getClasses() {
+		return Collections.singletonList(Tuple.class);
+	}
 
 	/**
 	 * Extract the {@link TypeInformation} for the {@link Tuple}.
 	 * @param type the type needed to extract {@link TypeInformation}
-	 * @param typeVariableBindings contains mapping relation between {@link TypeVariable} and {@link TypeInformation}. This
-	 *                             is used to extract the {@link TypeInformation} for {@link TypeVariable}.
-	 * @param extractingClasses contains the classes that type extractor stack is extracting for {@link TypeInformation}.
-	 *                             This is used to check whether there is a recursive type.
-	 * @return the {@link TypeInformation} of the type or {@code null} if the type information of the generic parameter of
+	 * @param context used to extract the {@link TypeInformation} for the generic parameters or components.
+	 * @return the {@link TypeInformation} of the type or {@link Optional#empty()} if the type information of the generic parameter of
 	 * the {@link Tuple} could not be extracted
 	 * @throws InvalidTypesException if the immediate child of {@link Tuple} is not a generic class or if the child of {@link Tuple}
 	 * is not a generic class or if the type equals {@link Tuple}
 	 */
-	@Nullable
 	@SuppressWarnings("unchecked")
-	static TypeInformation<?> extract(
-		final Type type,
-		final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings,
-		final List<Class<?>> extractingClasses) {
+	public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
 
 		if (!(isClassType(type) && Tuple.class.isAssignableFrom(typeToClass(type)))) {
-			return null;
+			return Optional.empty();
 		}
 
 		//do not allow usage of Tuple as type
@@ -72,7 +70,7 @@ class TupleTypeExtractor {
 		}
 
 		if (Tuple0.class.isAssignableFrom(typeToClass(type))) {
-			return new TupleTypeInfo(Tuple0.class);
+			return Optional.of(new TupleTypeInfo(Tuple0.class));
 		}
 
 		final List<ParameterizedType> typeHierarchy = buildParameterizedTypeHierarchy(type, Tuple.class);
@@ -82,6 +80,7 @@ class TupleTypeExtractor {
 		}
 
 		// check if immediate child of Tuple has generics
+		// TODO:: add a test for it
 		if (typeToClass(typeHierarchy.get(typeHierarchy.size() - 1)).getSuperclass() != Tuple.class) {
 			throw new InvalidTypesException("Tuple needs to be parameterized by using generics.");
 		}
@@ -92,40 +91,17 @@ class TupleTypeExtractor {
 
 		// check the origin type contains additional fields.
 		if (countFieldsInClass(typeToClass(type)) > typeArgumentsLength) {
-			return null;
+			return Optional.empty();
 		}
 
 		// create the type information for the subtypes
 		final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
 
 		for (int i = 0; i < typeArgumentsLength; i++) {
-			subTypesInfo[i] = TypeExtractor.extract(resolvedType.getActualTypeArguments()[i], typeVariableBindings, extractingClasses);
+			subTypesInfo[i] = context.extract(resolvedType.getActualTypeArguments()[i]);
 		}
 		// return tuple info
-		return new TupleTypeInfo(typeToClass(type), subTypesInfo);
-	}
-
-	/**
-	 * Infer the {@link TypeInformation} of the {@link TypeVariable} from the given {@link TypeInformation} that is {@link TupleTypeInfo}.
-	 * @param type the resolved type
-	 * @param typeInformation the type information of the given type
-	 * @return the mapping relation between {@link TypeVariable} and {@link TypeInformation} or {@code null} if the typeInformation
-	 * is not {@link TupleTypeInfo}.
-	 */
-	@Nullable
-	static Map<TypeVariable<?>, TypeInformation<?>> bindTypeVariables(final Type type, final TypeInformation<?> typeInformation) {
-
-		if (typeInformation instanceof TupleTypeInfo && isClassType(type) && Tuple.class.isAssignableFrom(typeToClass(type))) {
-			final List<ParameterizedType> typeHierarchy = buildParameterizedTypeHierarchy(type, Tuple.class);
-
-			if (typeHierarchy.size() > 0) {
-				final ParameterizedType tupleBaseClass = typeHierarchy.get(typeHierarchy.size() - 1);
-				final ParameterizedType resolvedTupleBaseClass = (ParameterizedType) resolveTypeFromTypeHierarchy(tupleBaseClass, typeHierarchy, true);
-				return TypeVariableBinder.bindTypeVariableFromGenericParameters(resolvedTupleBaseClass, typeInformation);
-			}
-			return Collections.emptyMap();
-		}
-		return null;
+		return Optional.of(new TupleTypeInfo(typeToClass(type), subTypesInfo));
 	}
 
 	/**
@@ -134,11 +110,11 @@ class TupleTypeExtractor {
 	 * @return the {@link TypeInformation} of the type or {@code null} if the value is not the Tuple type.
 	 */
 	@SuppressWarnings("unchecked")
-	@Nullable
-	static TypeInformation<?> extract(Object value) {
+	//TODO:: move this method out or make it a interface
+	static Optional<TypeInformation<?>> extract(Object value) {
 
 		if (!(value instanceof Tuple)) {
-			return null;
+			return Optional.empty();
 		}
 
 		final Tuple t = (Tuple) value;
@@ -148,13 +124,11 @@ class TupleTypeExtractor {
 			// not a tuple since it has more fields.
 			// we immediately call analyze Pojo here, because there is currently no other type that can handle such a class.
 			//TODO:: use createType??
-			return PojoTypeExtractor.extract(
-				value.getClass(),
-				Collections.emptyMap(),
-				Collections.emptyList());
+			return PojoTypeInfoExtractor.extract(value.getClass());
 		}
 
 		final TypeInformation<?>[] typeInformations = new TypeInformation[numFields];
+
 		for (int i = 0; i < numFields; i++) {
 			Object field = t.getField(i);
 
@@ -165,7 +139,7 @@ class TupleTypeExtractor {
 
 			typeInformations[i] = getForObject(field);
 		}
-		return new TupleTypeInfo(value.getClass(), typeInformations);
+		return Optional.of(new TupleTypeInfo(value.getClass(), typeInformations));
 	}
 
 	private static int countFieldsInClass(Class<?> clazz) {

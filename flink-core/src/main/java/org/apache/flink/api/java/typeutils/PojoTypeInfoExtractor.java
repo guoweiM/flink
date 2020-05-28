@@ -26,8 +26,6 @@ import org.apache.commons.lang3.ClassUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -36,10 +34,8 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.getAllDeclaredMethods;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
@@ -51,28 +47,22 @@ import static org.apache.flink.api.java.typeutils.TypeResolver.resolveTypeFromTy
 /**
  * This class extracts pojo type information.
  */
-public class PojoTypeExtractor {
+public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
 
-	private static final Logger LOG = LoggerFactory.getLogger(PojoTypeExtractor.class);
+	public static final PojoTypeInfoExtractor INSTANCE = new PojoTypeInfoExtractor();
 
+	private static final Logger LOG = LoggerFactory.getLogger(PojoTypeInfoExtractor.class);
 
 	/**
 	 * Extract the {@link TypeInformation} for the POJO type.
 	 * @param type the type needed to extract {@link TypeInformation}
-	 * @param typeVariableBindings contains mapping relation between {@link TypeVariable} and {@link TypeInformation}. This
-	 *                             is used to extract the {@link TypeInformation} for {@link TypeVariable}.
-	 * @param extractingClasses contains the classes that type extractor stack is extracting for {@link TypeInformation}.
-	 *                             This is used to check whether there is a recursive type.
-	 * @return the {@link TypeInformation} of the given type or {@code null} if the type is not a pojo type
+	 * @param context used to extract the {@link TypeInformation} for the generic parameters or field components.
+	 * @return the {@link TypeInformation} of the given type or {@link Optional#empty()} if the type is not a pojo type
 	 */
-	@Nullable
-	public static TypeInformation<?> extract(
-		final Type type,
-		final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings,
-		final List<Class<?>> extractingClasses) {
+	public Optional<TypeInformation<?>> extract(final Type type, final TypeInformationExtractor.Context context) {
 
 		if (!isClassType(type)) {
-			return null;
+			return Optional.empty();
 		}
 		final Class<?> clazz = typeToClass(type);
 
@@ -81,7 +71,7 @@ public class PojoTypeExtractor {
 				"and must be processed as GenericType. Please read the Flink documentation " +
 				"on \"Data Types & Serialization\" for details of the effect on performance.");
 			// TODO:: maybe we should return null
-			return new GenericTypeInfo<>(clazz);
+			return Optional.of(new GenericTypeInfo<>(clazz));
 		}
 
 		final List<Field> fields;
@@ -91,14 +81,14 @@ public class PojoTypeExtractor {
 			if (LOG.isDebugEnabled()) {
 				LOG.debug("Unable to handle type {} " + clazz + " as POJO. Message: " + e.getMessage(), e);
 			}
-			return null;
+			return Optional.empty();
 		}
 		if (fields.size() == 0) {
 			LOG.info("No fields were detected for " + clazz + " so it cannot be used as a POJO type " +
 				"and must be processed as GenericType. Please read the Flink documentation " +
 				"on \"Data Types & Serialization\" for details of the effect on performance.");
 			// TODO:: maybe we should always return null
-			return new GenericTypeInfo<>(clazz);
+			return Optional.of(new GenericTypeInfo<>(clazz));
 		}
 
 		final List<ParameterizedType> typeHierarchy = buildParameterizedTypeHierarchy(type, Object.class);
@@ -110,13 +100,12 @@ public class PojoTypeExtractor {
 				LOG.info("Class " + clazz + " cannot be used as a POJO type because not all fields are valid POJO fields, " +
 					"and must be processed as GenericType. Please read the Flink documentation " +
 					"on \"Data Types & Serialization\" for details of the effect on performance.");
-				return null;
+				return Optional.empty();
 			}
 			try {
 				final Type resolveFieldType = resolveTypeFromTypeHierarchy(fieldType, typeHierarchy, true);
 
-				TypeInformation<?> ti = TypeExtractor.extract(resolveFieldType, typeVariableBindings, extractingClasses);
-				pojoFields.add(new PojoField(field, ti));
+				pojoFields.add(new PojoField(field, context.extract(resolveFieldType)));
 			} catch (InvalidTypesException e) {
 				// TODO:: This exception handle leads to inconsistent behaviour when Tuple & TypeFactory fail.
 				Class<?> genericClass = Object.class;
@@ -139,7 +128,7 @@ public class PojoTypeExtractor {
 				LOG.info("Class " + clazz + " contains custom serialization methods we do not call, so it cannot be used as a POJO type " +
 					"and must be processed as GenericType. Please read the Flink documentation " +
 					"on \"Data Types & Serialization\" for details of the effect on performance.");
-				return null;
+				return Optional.empty();
 			}
 		}
 
@@ -156,18 +145,18 @@ public class PojoTypeExtractor {
 				LOG.info(clazz + " is missing a default constructor so it cannot be used as a POJO type "
 					+ "and must be processed as GenericType. Please read the Flink documentation "
 					+ "on \"Data Types & Serialization\" for details of the effect on performance.");
-				return null;
+				return Optional.empty();
 			}
 		}
 		if (defaultConstructor != null && !Modifier.isPublic(defaultConstructor.getModifiers())) {
 			LOG.info("The default constructor of " + clazz + " is not Public so it cannot be used as a POJO type "
 				+ "and must be processed as GenericType. Please read the Flink documentation "
 				+ "on \"Data Types & Serialization\" for details of the effect on performance.");
-			return null;
+			return Optional.empty();
 		}
 
 		// everything is checked, we return the pojo
-		return pojoType;
+		return Optional.of(pojoType);
 	}
 
 	/**
@@ -237,44 +226,9 @@ public class PojoTypeExtractor {
 		}
 	}
 
-	/**
-	 * Infer the {@link TypeInformation} of the {@link TypeVariable}  from the given {@link TypeInformation} that is {@link PojoTypeInfo}.
-	 * @param type the resolved type
-	 * @param typeInformation the type information of the given type
-	 * @return the mapping relation between {@link TypeVariable} and {@link TypeInformation} or {@code null} if the
-	 * typeInformation is not {@link PojoTypeInfo}.
-	 */
-	@Nullable
-	static Map<TypeVariable<?>, TypeInformation<?>> bindTypeVariables(
-		final Type type,
-		final TypeInformation<?> typeInformation) {
-
-		if (typeInformation instanceof PojoTypeInfo && isClassType(type)) {
-			final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings = new HashMap<>();
-			// build the entire type hierarchy for the pojo
-			final List<ParameterizedType> pojoHierarchy = buildParameterizedTypeHierarchy(type, Object.class);
-			// build the entire type hierarchy for the pojo
-			final List<Field> fields = getAllDeclaredFields(typeToClass(type), false);
-			for (Field field : fields) {
-				final Type fieldType = field.getGenericType();
-				final Type resolvedFieldType = resolveTypeFromTypeHierarchy(fieldType, pojoHierarchy, true);
-				final Map<TypeVariable<?>, TypeInformation<?>> sub =
-					TypeVariableBinder.bindTypeVariables(resolvedFieldType, getTypeOfPojoField(typeInformation, field));
-				typeVariableBindings.putAll(sub);
-			}
-
-			return typeVariableBindings.isEmpty() ? Collections.emptyMap() : typeVariableBindings;
-		}
-		return null;
+	// make this method public only for the avro extraction
+	public static Optional<TypeInformation<?>> extract(final Type type) {
+		return INSTANCE.extract(type, TypeInfoExtractContext.CONTEXT);
 	}
 
-	private static TypeInformation<?> getTypeOfPojoField(TypeInformation<?> pojoInfo, Field field) {
-		for (int j = 0; j < pojoInfo.getArity(); j++) {
-			PojoField pf = ((PojoTypeInfo<?>) pojoInfo).getPojoFieldAt(j);
-			if (pf.getField().getName().equals(field.getName())) {
-				return pf.getTypeInformation();
-			}
-		}
-		return null;
-	}
 }

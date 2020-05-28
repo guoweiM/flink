@@ -56,9 +56,11 @@ import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -218,6 +220,11 @@ public class BasicTypeInfo<T> extends TypeInformation<T> implements AtomicType<T
 		@SuppressWarnings("unchecked")
 		BasicTypeInfo<X> info = (BasicTypeInfo<X>) TYPES.get(type);
 		return info;
+	}
+
+	@PublicEvolving
+	public static List<Class<?>> getClasses() {
+		return new ArrayList<>(TYPES.keySet());
 	}
 
 	private static <X> TypeComparator<X> instantiateComparator(Class<? extends TypeComparator<X>> comparatorClass, boolean ascendingOrder) {
