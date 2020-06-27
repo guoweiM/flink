@@ -51,7 +51,7 @@ class TypeResolver {
 		Type resolvedType = type;
 
 		if (type instanceof TypeVariable) {
-			resolvedType = materializeTypeVariable(typeHierarchy, (TypeVariable) type);
+			resolvedType = materializeTypeVariable(typeHierarchy, (TypeVariable<?>) type);
 		}
 
 		if (resolvedType instanceof ParameterizedType) {

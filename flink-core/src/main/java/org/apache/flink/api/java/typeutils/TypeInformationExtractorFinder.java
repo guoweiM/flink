@@ -185,7 +185,7 @@ class TypeInformationExtractorFinder {
 
 		@Override
 		public Optional<TypeInformation<?>> extract(Type type, Context context) {
-			if (type instanceof Class<?>) {
+			if (isClassType(type)) {
 				return Optional.of(new GenericTypeInfo<>(typeToClass(type)));
 			}
 			return Optional.empty();

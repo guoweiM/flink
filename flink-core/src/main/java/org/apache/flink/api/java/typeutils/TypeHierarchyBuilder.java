@@ -68,8 +68,8 @@ class TypeHierarchyBuilder {
 	 */
 	static List<ParameterizedType> buildParameterizedTypeHierarchy(
 		final Type type,
-		final Predicate<Class> stopCondition,
-		final Predicate<Class> matcher) {
+		final Predicate<Class<?>> stopCondition,
+		final Predicate<Class<?>> matcher) {
 
 		if (isClassType(type)) {
 			final List<ParameterizedType> typeHierarchy = new ArrayList<>();
@@ -115,8 +115,8 @@ class TypeHierarchyBuilder {
 	 */
 	private static List<ParameterizedType> buildParameterizedTypeHierarchy(
 		final Class<?> clazz,
-		final Predicate<Class> stopCondition,
-		final Predicate<Class> matcher,
+		final Predicate<Class<?>> stopCondition,
+		final Predicate<Class<?>> matcher,
 		final boolean traverseInterface) {
 
 		final List<ParameterizedType> typeHierarchy = new ArrayList<>();
@@ -129,14 +129,12 @@ class TypeHierarchyBuilder {
 					if (type instanceof ParameterizedType) {
 						typeHierarchy.add((ParameterizedType) type);
 					}
-					if (stopCondition.test(typeToClass(type))) {
-						return typeHierarchy;
-					} else {
+					if (!stopCondition.test(typeToClass(type))) {
 						final List<ParameterizedType> subTypeHierarchy =
 							buildParameterizedTypeHierarchy(typeToClass(type), stopCondition, matcher, true);
 						typeHierarchy.addAll(subTypeHierarchy);
-						return typeHierarchy;
 					}
+					return typeHierarchy;
 				}
 			}
 		}
@@ -146,24 +144,22 @@ class TypeHierarchyBuilder {
 			if (type instanceof ParameterizedType) {
 				typeHierarchy.add((ParameterizedType) type);
 			}
-			if (stopCondition.test(typeToClass(type))) {
-				return typeHierarchy;
-			} else {
+			if (!stopCondition.test(typeToClass(type))) {
 				final List<ParameterizedType> subTypeHierarchy =
 					buildParameterizedTypeHierarchy(typeToClass(type), stopCondition, matcher, traverseInterface);
 				typeHierarchy.addAll(subTypeHierarchy);
-				return typeHierarchy;
 			}
+			return typeHierarchy;
 		}
 
 		return Collections.emptyList();
 	}
 
-	private static Predicate<Class> isSameClass(final Class<?> baseClass) {
+	private static Predicate<Class<?>> isSameClass(final Class<?> baseClass) {
 		return clazz -> clazz.equals(baseClass);
 	}
 
-	private static Predicate<Class> assignTo(final Class<?> baseClass) {
+	private static Predicate<Class<?>> assignTo(final Class<?> baseClass) {
 		return baseClass::isAssignableFrom;
 	}
 }
