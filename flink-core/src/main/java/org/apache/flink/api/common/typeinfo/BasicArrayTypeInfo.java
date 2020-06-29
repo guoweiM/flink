@@ -26,7 +26,9 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.GenericArraySerializer;
 import org.apache.flink.api.common.typeutils.base.array.StringArraySerializer;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -152,6 +154,11 @@ public final class BasicArrayTypeInfo<T, C> extends TypeInformation<T> {
 	@Override
 	public String toString() {
 		return this.getClass().getSimpleName() + "<" + componentInfo + ">";
+	}
+
+	@PublicEvolving
+	public static List<Class<?>> getClasses() {
+		return new ArrayList<>(TYPES.keySet());
 	}
 
 	// --------------------------------------------------------------------------------------------

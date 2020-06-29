@@ -32,12 +32,41 @@ import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClas
 public abstract class TypeInformationExtractorForClass implements TypeInformationExtractor {
 
 	public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
-
+		if (type instanceof ClassDescription) {
+			return extract(((ClassDescription) type).getClazz());
+		}
 		if (!(type instanceof Class)) {
 			return Optional.empty();
 		}
 		return extract(typeToClass(type));
 	}
 
+	public Optional<Type> resolve(final Type type, final ResolveContext resolveContext) {
+		if (type instanceof Class) {
+			return resolve((Class<?>)type);
+		}
+		return Optional.empty();
+	}
+
+	public abstract Optional<Type> resolve(final Class<?> clazz);
+
+	public class ClassDescription extends TypeDescriptionResolver.TypeDescription {
+		private final Class<?> clazz;
+
+		public ClassDescription(Class<?> clazz) {
+			this.clazz = clazz;
+		}
+
+		public Class<?> getClazz() {
+			return clazz;
+		}
+
+		@Override
+		Type getType() {
+			return clazz;
+		}
+	}
+
 	public abstract Optional<TypeInformation<?>> extract(final Class<?> clazz);
+
 }

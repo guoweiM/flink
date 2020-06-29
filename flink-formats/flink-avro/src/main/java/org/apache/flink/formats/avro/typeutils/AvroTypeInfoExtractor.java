@@ -24,8 +24,7 @@ import org.apache.flink.formats.avro.utils.AvroKryoSerializerUtils;
 
 import org.apache.avro.specific.SpecificRecordBase;
 
-import javax.annotation.Nullable;
-
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -37,14 +36,21 @@ import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isAvroType
  */
 public class AvroTypeInfoExtractor extends TypeInformationExtractorForClass {
 
-	private AvroKryoSerializerUtils avroKryoSerializerUtils = new AvroKryoSerializerUtils();
+	private final AvroKryoSerializerUtils avroKryoSerializerUtils = new AvroKryoSerializerUtils();
+
+	public Optional<Type> resolve(final Class<?> clazz) {
+		if (isAvroType(clazz)) {
+			return Optional.of(new ClassDescription(clazz));
+		} else {
+			return Optional.empty();
+		}
+	}
 
 	@Override
 	public List<Class<?>> getClasses() {
 		return Collections.singletonList(SpecificRecordBase.class);
 	}
 
-	@Nullable
 	@Override
 	public Optional<TypeInformation<?>> extract(final Class<?> clazz) {
 		if (isAvroType(clazz)) {

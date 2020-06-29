@@ -41,7 +41,9 @@ import org.apache.flink.api.common.typeutils.base.array.PrimitiveArrayComparator
 import org.apache.flink.api.common.typeutils.base.array.ShortPrimitiveArrayComparator;
 import org.apache.flink.api.common.typeutils.base.array.ShortPrimitiveArraySerializer;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -222,6 +224,11 @@ public class PrimitiveArrayTypeInfo<T> extends TypeInformation<T> implements Ato
 		TYPES.put(float[].class, FLOAT_PRIMITIVE_ARRAY_TYPE_INFO);
 		TYPES.put(double[].class, DOUBLE_PRIMITIVE_ARRAY_TYPE_INFO);
 		TYPES.put(char[].class, CHAR_PRIMITIVE_ARRAY_TYPE_INFO);
+	}
+
+	@PublicEvolving
+	public static List<Class<?>> getClasses() {
+		return new ArrayList<>(TYPES.keySet());
 	}
 
 	@Override

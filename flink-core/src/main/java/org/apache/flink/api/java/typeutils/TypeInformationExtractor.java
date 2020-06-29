@@ -36,6 +36,15 @@ import java.util.Optional;
 @Internal
 public interface TypeInformationExtractor {
 
+	interface ResolveContext {
+
+		List<Class<?>> getExtractingClasses();
+
+		Type resolve(final Type type);
+	}
+
+	Optional<Type> resolve(final Type type, final ResolveContext context);
+
 	/**
 	 * @return the classes that the extractor could extract the{@link TypeInformationExtractor} corresponding to.
 	 */

@@ -21,6 +21,7 @@ package org.apache.flink.api.java.typeutils;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +29,14 @@ import java.util.Optional;
  * Extract TypeInformation for Basic Type.
  */
 public class BaseTypeInfoExtractor extends TypeInformationExtractorForClass {
+
+	public Optional<Type> resolve(final Class<?> clazz) {
+		if (BasicTypeInfo.getClasses().contains(clazz)) {
+			return Optional.of(new ClassDescription(clazz));
+		} else {
+				return Optional.empty();
+		}
+	}
 
 	@Override
 	public Optional<TypeInformation<?>> extract(final Class<?> clazz) {

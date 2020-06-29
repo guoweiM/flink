@@ -301,6 +301,10 @@ public class TypeExtractionUtils {
 	 * Convert ParameterizedType or Class to a Class.
 	 */
 	public static Class<?> typeToClass(Type t) {
+		if (t instanceof TypeDescriptionResolver.TypeDescription) {
+			t = ((TypeDescriptionResolver.TypeDescription) t).getType();
+		}
+
 		if (t instanceof Class) {
 			return (Class<?>) t;
 		}
@@ -314,6 +318,9 @@ public class TypeExtractionUtils {
 	 * Checks if a type can be converted to a Class. This is true for ParameterizedType and Class.
 	 */
 	public static boolean isClassType(Type t) {
+		if (t instanceof TypeDescriptionResolver.TypeDescription) {
+			t = ((TypeDescriptionResolver.TypeDescription) t).getType();
+		}
 		return t instanceof Class<?> || t instanceof ParameterizedType;
 	}
 

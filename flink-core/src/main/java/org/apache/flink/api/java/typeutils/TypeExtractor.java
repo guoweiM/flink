@@ -39,6 +39,7 @@ import org.apache.flink.api.common.typeinfo.TypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.typeutils.TypeExtractionUtils.LambdaExecutable;
+import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableList;
 import org.apache.flink.util.Preconditions;
 
 import java.lang.reflect.Constructor;
@@ -787,7 +788,6 @@ public class TypeExtractor {
 	@SuppressWarnings("unchecked")
 	public static <X> TypeInformation<X> getForObject(X value) {
 		checkNotNull(value);
-
 		return (TypeInformation<X>) Stream.<Supplier<Optional<TypeInformation<?>>>>of(
 			() -> TypeInfoFactoryExtractor.INSTANCE.extract(value.getClass(), TypeInfoExtractContext.CONTEXT),
 			() -> TupleTypeInfoExtractor.extract(value),
@@ -923,8 +923,9 @@ public class TypeExtractor {
 
 	private static TypeInformation<?> extract(final Type type, final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings) {
 		final List<Class<?>> currentExtractingClasses = isClassType(type) ? Collections.singletonList(typeToClass(type)) : Collections.emptyList();
+		final Type returnTypeDescription = TypeDescriptionResolver.resolve(type, new TypeDescriptionResolver.TypeDescriptionResolveContext(currentExtractingClasses));
 
-		return TypeExtractionUtils.extract(type, new TypeInfoExtractContext(typeVariableBindings, currentExtractingClasses));
+		return TypeExtractionUtils.extract(returnTypeDescription, new TypeInfoExtractContext(typeVariableBindings, currentExtractingClasses));
 	}
 
 	/**

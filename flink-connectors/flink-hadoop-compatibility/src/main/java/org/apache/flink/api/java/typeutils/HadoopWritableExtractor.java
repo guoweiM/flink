@@ -23,12 +23,12 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 import org.apache.hadoop.io.Writable;
 
-import javax.annotation.Nullable;
-
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
@@ -36,7 +36,13 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  */
 public class HadoopWritableExtractor extends TypeInformationExtractorForClass {
 
-	@Nullable
+	public Optional<Type> resolve(final Class<?> clazz) {
+		if (TypeExtractionUtils.isHadoopWritable(typeToClass(clazz))) {
+			return Optional.of(new ClassDescription(clazz));
+		}
+		return Optional.empty();
+	}
+
 	@Override
 	public Optional<TypeInformation<?>> extract(final Class<?> clazz) {
 			// check for writable types

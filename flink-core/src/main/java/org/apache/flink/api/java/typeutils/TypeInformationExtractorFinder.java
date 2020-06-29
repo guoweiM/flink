@@ -87,6 +87,7 @@ class TypeInformationExtractorFinder {
 				.stream()
 				.filter(c -> c.isAssignableFrom(clazz))
 				.map(EXTRACTORS::get)
+				.filter(x -> x != null) //TODO:: why x is null ?
 				.forEachOrdered(typeInfoExtractors::add);
 
 			if (typeInfoExtractors.size() == 1) {
@@ -132,20 +133,48 @@ class TypeInformationExtractorFinder {
 		static final TypeVariableExtractor INSTANCE = new TypeVariableExtractor();
 
 		@Override
-		public Optional<TypeInformation<?>> extract(Type type, Context context) {
+		public Optional<Type> resolve(final Type type, final ResolveContext context) {
 			if (type instanceof TypeVariable) {
-				final TypeInformation<?> typeInfo = context.getTypeVariableBindings().get(type);
-				if (typeInfo != null) {
-					return Optional.of(typeInfo);
-				} else {
-					throw new InvalidTypesException("Type of TypeVariable '" + ((TypeVariable<?>) type).getName() + "' in '"
-						+ ((TypeVariable<?>) type).getGenericDeclaration() + "' could not be determined. This is most likely a type erasure problem. "
-						+ "The type extraction currently supports types with generic variables only in cases where "
-						+ "all variables in the return type can be deduced from the input type(s). "
-						+ "Otherwise the type has to be specified explicitly using type information.");
-				}
+				return Optional.of(new TypeVariableDescription((TypeVariable<?>) type));
+			}
+			return Optional.empty();
+		}
+
+		@Override
+		public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
+			final TypeVariable<?> typeVariable;
+			if (type instanceof TypeVariableDescription) {
+				typeVariable = ((TypeVariableDescription) type).getTypeVariable();
 			} else {
 				return Optional.empty();
+			}
+
+			final TypeInformation<?> typeInfo = context.getTypeVariableBindings().get(typeVariable);
+			if (typeInfo != null) {
+				return Optional.of(typeInfo);
+			} else {
+				throw new InvalidTypesException("Type of TypeVariable '" + typeVariable.getName() + "' in '"
+					+ typeVariable.getGenericDeclaration() + "' could not be determined. This is most likely a type erasure problem. "
+					+ "The type extraction currently supports types with generic variables only in cases where "
+					+ "all variables in the return type can be deduced from the input type(s). "
+					+ "Otherwise the type has to be specified explicitly using type information.");
+			}
+		}
+
+		static class TypeVariableDescription extends TypeDescriptionResolver.TypeDescription {
+			private final TypeVariable<?> typeVariable;
+
+			public TypeVariableDescription(final TypeVariable<?> typeVariable) {
+				this.typeVariable = typeVariable;
+			}
+
+			public TypeVariable getTypeVariable() {
+				return typeVariable;
+			}
+
+			@Override
+			Type getType() {
+				return typeVariable;
 			}
 		}
 	}
@@ -154,13 +183,20 @@ class TypeInformationExtractorFinder {
 
 		static final RecursiveTypeInfoExtractor INSTANCE = new RecursiveTypeInfoExtractor();
 
-		@Override
-		public Optional<TypeInformation<?>> extract(Type type, Context context) {
+		public Optional<Type> resolve(final Type type, final ResolveContext context) {
 			if (isClassType(type)) {
 				final Class<?> typeClass = typeToClass(type);
 				if (countTypeInHierarchy(context.getExtractingClasses(), typeClass) > 1) {
-					return Optional.of(new GenericTypeInfo<>(typeClass));
+					return Optional.of(new RecursiveTypeDescription(typeClass));
 				}
+			}
+			return Optional.empty();
+		}
+
+		@Override
+		public Optional<TypeInformation<?>> extract(Type type, Context context) {
+			if (type instanceof RecursiveTypeDescription) {
+				return Optional.of(new GenericTypeInfo<>(((RecursiveTypeDescription) type).getClazz()));
 			}
 			return Optional.empty();
 		}
@@ -177,18 +213,61 @@ class TypeInformationExtractorFinder {
 			}
 			return count;
 		}
+
+		class RecursiveTypeDescription extends TypeDescriptionResolver.TypeDescription {
+
+			private final Class<?> clazz;
+
+			public RecursiveTypeDescription(final Class<?> clazz) {
+				this.clazz = clazz;
+			}
+
+			@Override
+			Type getType() {
+				return clazz;
+			}
+
+			public Class<?> getClazz() {
+				return clazz;
+			}
+		}
 	}
 
-	private static class GenericTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
+	static class GenericTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
 
 		static final GenericTypeInfoExtractor INSTANCE = new GenericTypeInfoExtractor();
 
-		@Override
-		public Optional<TypeInformation<?>> extract(Type type, Context context) {
+		public Optional<Type> resolve(final Type type, final ResolveContext context) {
 			if (isClassType(type)) {
-				return Optional.of(new GenericTypeInfo<>(typeToClass(type)));
+				return Optional.of(new GenericTypeDescription(typeToClass(type)));
 			}
 			return Optional.empty();
+		}
+
+		@Override
+		public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
+			if (type instanceof GenericTypeDescription) {
+				return Optional.of(new GenericTypeInfo<>(((GenericTypeDescription) type).getClazz()));
+			}
+			return Optional.empty();
+		}
+
+		public static class GenericTypeDescription extends TypeDescriptionResolver.TypeDescription {
+
+			private final Class<?> clazz;
+
+			public GenericTypeDescription(Class<?> clazz) {
+				this.clazz = clazz;
+			}
+
+			public Class<?> getClazz() {
+				return clazz;
+			}
+
+			@Override
+			Type getType() {
+				return clazz;
+			}
 		}
 	}
 }

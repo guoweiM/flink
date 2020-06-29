@@ -20,6 +20,7 @@ package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,10 @@ import java.util.Optional;
  * 	Extract TypeInformation for Enum.
  */
 public class EnumTypeInfoExtractor extends TypeInformationExtractorForClass {
+
+	public Optional<Type> resolve(final Class<?> clazz) {
+		return Optional.of(new ClassDescription(clazz));
+	}
 
 	@Override
 	@SuppressWarnings("unchecked")

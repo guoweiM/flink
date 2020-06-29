@@ -22,6 +22,7 @@ import org.apache.flink.api.common.functions.InvalidTypesException;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple0;
+import org.apache.flink.api.java.typeutils.TypeDescriptionResolver.TypeDescription;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -47,6 +48,84 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 		return Collections.singletonList(Tuple.class);
 	}
 
+	public Optional<Type> resolve(final Type type, final ResolveContext context) {
+
+		if (!(isClassType(type) && Tuple.class.isAssignableFrom(typeToClass(type)))) {
+			return Optional.empty();
+		}
+
+		//do not allow usage of Tuple as type
+		if (typeToClass(type).equals(Tuple.class)) {
+			throw new InvalidTypesException(
+				"Usage of class Tuple as a type is not allowed. Use a concrete subclass (e.g. Tuple1, Tuple2, etc.) instead.");
+		}
+
+		if (Tuple0.class.isAssignableFrom(typeToClass(type))) {
+			return Optional.of(Tuple0Description.INSTANCE);
+		}
+
+		final List<ParameterizedType> typeHierarchy = buildParameterizedTypeHierarchy(type, Tuple.class);
+
+		if (typeHierarchy.size() < 1) {
+			throw new InvalidTypesException("Tuple needs to be parameterized by using generics.");
+		}
+
+		// check if immediate child of Tuple has generics
+		// TODO:: add a test for it
+		if (typeToClass(typeHierarchy.get(typeHierarchy.size() - 1)).getSuperclass() != Tuple.class) {
+			throw new InvalidTypesException("Tuple needs to be parameterized by using generics.");
+		}
+
+		final ParameterizedType curT = typeHierarchy.get(typeHierarchy.size() - 1);
+		final int typeArgumentsLength = curT.getActualTypeArguments().length;
+
+		// check the origin type contains additional fields.
+		if (countFieldsInClass(typeToClass(type)) > typeArgumentsLength) {
+			return Optional.empty();
+		}
+		final ParameterizedType resolvedType = (ParameterizedType) resolveTypeFromTypeHierarchy(curT, typeHierarchy, true);
+
+		final Type[] types = new Type[resolvedType.getActualTypeArguments().length];
+		for (int i = 0; i < typeArgumentsLength; i++) {
+			types[i] = context.resolve(resolvedType.getActualTypeArguments()[i]);
+		}
+		return Optional.of(new TupleDescription(typeToClass(type), types));
+	}
+
+	private static class Tuple0Description extends TypeDescription {
+		static final Tuple0Description INSTANCE = new Tuple0Description();
+
+		@Override
+		Type getType() {
+			return Tuple0.class;
+		}
+	}
+
+	private static class TupleDescription extends TypeDescription {
+
+		private final Type[] types;
+
+		private final Class<?> clazz;
+
+		TupleDescription(final Class<?> clazz, final Type[] typeDescriptions) {
+			this.clazz = clazz;
+			this.types = typeDescriptions;
+		}
+
+		public Type[] getTypes() {
+			return types;
+		}
+
+		@Override
+		Type getType() {
+			return clazz;
+		}
+
+		public Class<?> getClazz() {
+			return clazz;
+		}
+	}
+
 	/**
 	 * Extract the {@link TypeInformation} for the {@link Tuple}.
 	 * @param type the type needed to extract {@link TypeInformation}
@@ -58,6 +137,21 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 	 */
 	@SuppressWarnings("unchecked")
 	public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
+
+		if (type instanceof Tuple0Description) {
+			return Optional.of(new TupleTypeInfo(Tuple0.class));
+		} else if (type instanceof TupleDescription) {
+			final TupleDescription tupleDescription = (TupleDescription) type;
+			final int typeArgumentsLength = tupleDescription.getTypes().length;
+			// create the type information for the subtypes
+			final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
+
+			for (int i = 0; i < typeArgumentsLength; i++) {
+				subTypesInfo[i] = context.extract(tupleDescription.getTypes()[i]);
+			}
+			// return tuple info
+			return Optional.of(new TupleTypeInfo(tupleDescription.getClazz(), subTypesInfo));
+		}
 
 		if (!(isClassType(type) && Tuple.class.isAssignableFrom(typeToClass(type)))) {
 			return Optional.empty();

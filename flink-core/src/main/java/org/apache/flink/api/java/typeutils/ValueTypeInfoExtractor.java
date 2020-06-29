@@ -21,6 +21,7 @@ package org.apache.flink.api.java.typeutils;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.types.Value;
 
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,14 @@ import java.util.Optional;
  * Extract TypeInformation for Value type.
  */
 public class ValueTypeInfoExtractor extends TypeInformationExtractorForClass {
+
+	public Optional<Type> resolve(final Class<?> clazz){
+		if (Value.class.isAssignableFrom(clazz)) {
+			return Optional.of(new ClassDescription(clazz));
+		} else {
+			return Optional.empty();
+		}
+	}
 
 	@Override
 	public Optional<TypeInformation<?>> extract(Class<?> clazz) {
