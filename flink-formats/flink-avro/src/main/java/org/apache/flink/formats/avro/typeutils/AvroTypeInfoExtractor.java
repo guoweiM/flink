@@ -40,7 +40,7 @@ public class AvroTypeInfoExtractor extends TypeInformationExtractorForClass {
 
 	public Optional<Type> resolve(final Class<?> clazz) {
 		if (isAvroType(clazz)) {
-			return Optional.of(new ClassDescription(clazz));
+			return Optional.of(new AvroTypeDescription(clazz));
 		} else {
 			return Optional.empty();
 		}
@@ -51,11 +51,15 @@ public class AvroTypeInfoExtractor extends TypeInformationExtractorForClass {
 		return Collections.singletonList(SpecificRecordBase.class);
 	}
 
-	@Override
-	public Optional<TypeInformation<?>> extract(final Class<?> clazz) {
-		if (isAvroType(clazz)) {
-			return Optional.of(avroKryoSerializerUtils.createAvroTypeInfo(clazz));
+	class AvroTypeDescription extends ClassDescription {
+
+		public AvroTypeDescription(final Class<?> clazz) {
+			super(clazz);
 		}
-		return Optional.empty();
+
+		@Override
+		public TypeInformation<?> create() {
+			return avroKryoSerializerUtils.createAvroTypeInfo(getClazz());
+		}
 	}
 }

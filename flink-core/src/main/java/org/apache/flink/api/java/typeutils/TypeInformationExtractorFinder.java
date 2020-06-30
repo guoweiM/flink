@@ -135,41 +135,42 @@ class TypeInformationExtractorFinder {
 		@Override
 		public Optional<Type> resolve(final Type type, final ResolveContext context) {
 			if (type instanceof TypeVariable) {
-				return Optional.of(new TypeVariableDescription((TypeVariable<?>) type));
+				final TypeVariable typeVariable = (TypeVariable) type;
+				return Optional.of(new TypeVariableDescription(typeVariable, context.getTypeVariableBindings().get(typeVariable)));
 			}
 			return Optional.empty();
 		}
 
 		@Override
 		public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
-			final TypeVariable<?> typeVariable;
 			if (type instanceof TypeVariableDescription) {
-				typeVariable = ((TypeVariableDescription) type).getTypeVariable();
+				return Optional.of(((TypeVariableDescription) type).create());
 			} else {
 				return Optional.empty();
-			}
-
-			final TypeInformation<?> typeInfo = context.getTypeVariableBindings().get(typeVariable);
-			if (typeInfo != null) {
-				return Optional.of(typeInfo);
-			} else {
-				throw new InvalidTypesException("Type of TypeVariable '" + typeVariable.getName() + "' in '"
-					+ typeVariable.getGenericDeclaration() + "' could not be determined. This is most likely a type erasure problem. "
-					+ "The type extraction currently supports types with generic variables only in cases where "
-					+ "all variables in the return type can be deduced from the input type(s). "
-					+ "Otherwise the type has to be specified explicitly using type information.");
 			}
 		}
 
 		static class TypeVariableDescription extends TypeDescriptionResolver.TypeDescription {
+
+			//TODO:: maybe we should remove this field?
 			private final TypeVariable<?> typeVariable;
 
-			public TypeVariableDescription(final TypeVariable<?> typeVariable) {
+			private final TypeInformation<?> typeInformationOfTypeVariable;
+
+			public TypeVariableDescription(final TypeVariable<?> typeVariable, final TypeInformation<?> typeInformationOfTypeVariable) {
 				this.typeVariable = typeVariable;
+				this.typeInformationOfTypeVariable = typeInformationOfTypeVariable;
 			}
 
-			public TypeVariable getTypeVariable() {
-				return typeVariable;
+			public TypeInformation<?> create() {
+				if (typeInformationOfTypeVariable == null) {
+					throw new InvalidTypesException("Type of TypeVariable '" + typeVariable.getName() + "' in '"
+						+ typeVariable.getGenericDeclaration() + "' could not be determined. This is most likely a type erasure problem. "
+						+ "The type extraction currently supports types with generic variables only in cases where "
+						+ "all variables in the return type can be deduced from the input type(s). "
+						+ "Otherwise the type has to be specified explicitly using type information.");
+				}
+				return typeInformationOfTypeVariable;
 			}
 
 			@Override
@@ -196,7 +197,7 @@ class TypeInformationExtractorFinder {
 		@Override
 		public Optional<TypeInformation<?>> extract(Type type, Context context) {
 			if (type instanceof RecursiveTypeDescription) {
-				return Optional.of(new GenericTypeInfo<>(((RecursiveTypeDescription) type).getClazz()));
+				return Optional.of(((RecursiveTypeDescription) type).create());
 			}
 			return Optional.empty();
 		}
@@ -220,6 +221,10 @@ class TypeInformationExtractorFinder {
 
 			public RecursiveTypeDescription(final Class<?> clazz) {
 				this.clazz = clazz;
+			}
+
+			public TypeInformation<?> create() {
+				return new GenericTypeInfo<>(clazz);
 			}
 
 			@Override
@@ -247,7 +252,7 @@ class TypeInformationExtractorFinder {
 		@Override
 		public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
 			if (type instanceof GenericTypeDescription) {
-				return Optional.of(new GenericTypeInfo<>(((GenericTypeDescription) type).getClazz()));
+				return Optional.of(((GenericTypeDescription) type).create());
 			}
 			return Optional.empty();
 		}
@@ -258,6 +263,10 @@ class TypeInformationExtractorFinder {
 
 			public GenericTypeDescription(Class<?> clazz) {
 				this.clazz = clazz;
+			}
+
+			public TypeInformation<?> create() {
+				return new GenericTypeInfo<>(clazz);
 			}
 
 			public Class<?> getClazz() {

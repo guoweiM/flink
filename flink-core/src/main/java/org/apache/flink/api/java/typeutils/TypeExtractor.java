@@ -39,7 +39,6 @@ import org.apache.flink.api.common.typeinfo.TypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.typeutils.TypeExtractionUtils.LambdaExecutable;
-import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableList;
 import org.apache.flink.util.Preconditions;
 
 import java.lang.reflect.Constructor;
@@ -789,7 +788,18 @@ public class TypeExtractor {
 	public static <X> TypeInformation<X> getForObject(X value) {
 		checkNotNull(value);
 		return (TypeInformation<X>) Stream.<Supplier<Optional<TypeInformation<?>>>>of(
-			() -> TypeInfoFactoryExtractor.INSTANCE.extract(value.getClass(), TypeInfoExtractContext.CONTEXT),
+			//TODO:: maybe we need a refactory. check it..
+			// SEE {@link Pojo}
+			() -> {
+				final Optional<Type> t =
+					TypeInfoFactoryExtractor.INSTANCE.resolve(value.getClass(),
+						new TypeDescriptionResolver.TypeDescriptionResolveContext(Collections.singletonList(value.getClass()), Collections.emptyMap()));
+				if (t.isPresent()) {
+					//TODO:: maybe we need a not empty current extracting class?? see
+					return TypeInfoFactoryExtractor.INSTANCE.extract(t.get(), TypeInfoExtractContext.CONTEXT);
+				}
+				return Optional.empty();
+			},
 			() -> TupleTypeInfoExtractor.extract(value),
 			() -> RowTypeExtractor.extract(value))
 			.map(Supplier::get)
@@ -923,7 +933,7 @@ public class TypeExtractor {
 
 	private static TypeInformation<?> extract(final Type type, final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings) {
 		final List<Class<?>> currentExtractingClasses = isClassType(type) ? Collections.singletonList(typeToClass(type)) : Collections.emptyList();
-		final Type returnTypeDescription = TypeDescriptionResolver.resolve(type, new TypeDescriptionResolver.TypeDescriptionResolveContext(currentExtractingClasses));
+		final Type returnTypeDescription = TypeDescriptionResolver.resolve(type, typeVariableBindings);
 
 		return TypeExtractionUtils.extract(returnTypeDescription, new TypeInfoExtractContext(typeVariableBindings, currentExtractingClasses));
 	}

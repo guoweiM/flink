@@ -134,35 +134,7 @@ public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformatio
 			}
 			return Optional.of(createdTypeInfo);
 		}
-
-		final Tuple3<Type, List<ParameterizedType>, TypeInfoFactory<?>> result = buildTypeHierarchy(type);
-
-		if (result == null) {
-			return Optional.empty();
-		}
-
-		final Type resolvedFactoryDefiningType = resolveTypeFromTypeHierarchy(result.f0, result.f1, true);
-
-		// infer possible type parameters from input
-		final Map<String, TypeInformation<?>> genericParams;
-
-		if (resolvedFactoryDefiningType instanceof ParameterizedType) {
-			genericParams = new HashMap<>();
-			final Type[] genericTypes = ((ParameterizedType) resolvedFactoryDefiningType).getActualTypeArguments();
-			final Type[] args = typeToClass(resolvedFactoryDefiningType).getTypeParameters();
-			for (int i = 0; i < genericTypes.length; i++) {
-				// the user should deal exception
-				genericParams.put(args[i].toString(), context.extract(genericTypes[i]));
-			}
-		} else {
-			genericParams = Collections.emptyMap();
-		}
-
-		final TypeInformation<?> createdTypeInfo = result.f2.createTypeInfo(type, genericParams);
-		if (createdTypeInfo == null) {
-			throw new InvalidTypesException("TypeInfoFactory returned invalid TypeInformation 'null'");
-		}
-		return Optional.of(createdTypeInfo);
+		return Optional.empty();
 	}
 
 	/**

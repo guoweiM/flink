@@ -64,27 +64,27 @@ public class AvroTypeInfo<T extends SpecificRecordBase> extends PojoTypeInfo<T> 
 	@SuppressWarnings("unchecked")
 	@Internal
 	private static <T extends SpecificRecordBase> List<PojoField> generateFieldsFromAvroSchema(Class<T> typeClass) {
-			final Optional<TypeInformation<?>> ti = PojoTypeInfoExtractor.extract(typeClass);
+		final Optional<TypeInformation<?>> ti = PojoTypeInfoExtractor.extract(typeClass);
 
-			if ((!ti.isPresent()) || !(ti.get() instanceof PojoTypeInfo)) {
-				throw new IllegalStateException("Expecting type to be a PojoTypeInfo");
-			}
-			PojoTypeInfo pti =  (PojoTypeInfo) ti.get();
-			List<PojoField> newFields = new ArrayList<>(pti.getTotalFields());
+		if ((!ti.isPresent()) || !(ti.get() instanceof PojoTypeInfo)) {
+			throw new IllegalStateException("Expecting type to be a PojoTypeInfo");
+		}
+		PojoTypeInfo pti =  (PojoTypeInfo) ti.get();
+		List<PojoField> newFields = new ArrayList<>(pti.getTotalFields());
 
-			for (int i = 0; i < pti.getArity(); i++) {
-				PojoField f = pti.getPojoFieldAt(i);
-				TypeInformation newType = f.getTypeInformation();
-				// check if type is a CharSequence
-				if (newType instanceof GenericTypeInfo) {
-					if ((newType).getTypeClass().equals(CharSequence.class)) {
-						// replace the type by a org.apache.avro.util.Utf8
-						newType = new GenericTypeInfo(org.apache.avro.util.Utf8.class);
-					}
+		for (int i = 0; i < pti.getArity(); i++) {
+			PojoField f = pti.getPojoFieldAt(i);
+			TypeInformation newType = f.getTypeInformation();
+			// check if type is a CharSequence
+			if (newType instanceof GenericTypeInfo) {
+				if ((newType).getTypeClass().equals(CharSequence.class)) {
+					// replace the type by a org.apache.avro.util.Utf8
+					newType = new GenericTypeInfo(org.apache.avro.util.Utf8.class);
 				}
-				PojoField newField = new PojoField(f.getField(), newType);
-				newFields.add(newField);
 			}
-			return newFields;
+			PojoField newField = new PojoField(f.getField(), newType);
+			newFields.add(newField);
+		}
+		return newFields;
 	}
 }

@@ -38,16 +38,7 @@ public class HadoopWritableExtractor extends TypeInformationExtractorForClass {
 
 	public Optional<Type> resolve(final Class<?> clazz) {
 		if (TypeExtractionUtils.isHadoopWritable(typeToClass(clazz))) {
-			return Optional.of(new ClassDescription(clazz));
-		}
-		return Optional.empty();
-	}
-
-	@Override
-	public Optional<TypeInformation<?>> extract(final Class<?> clazz) {
-			// check for writable types
-		if (TypeExtractionUtils.isHadoopWritable(clazz)) {
-			return Optional.of(createHadoopWritableTypeInfo(clazz));
+			return Optional.of(new HadoopWritableTypeDescription(clazz));
 		}
 		return Optional.empty();
 	}
@@ -63,5 +54,17 @@ public class HadoopWritableExtractor extends TypeInformationExtractorForClass {
 		//TODO:: refactory this
 		checkNotNull(clazz);
 		return new WritableTypeInfo(clazz);
+	}
+
+	class HadoopWritableTypeDescription extends ClassDescription {
+
+		public HadoopWritableTypeDescription(final Class<?> clazz) {
+			super(clazz);
+		}
+
+		@Override
+		public TypeInformation<?> create() {
+			return createHadoopWritableTypeInfo(this.getClazz());
+		}
 	}
 }

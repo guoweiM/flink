@@ -33,17 +33,7 @@ public class ValueTypeInfoExtractor extends TypeInformationExtractorForClass {
 
 	public Optional<Type> resolve(final Class<?> clazz){
 		if (Value.class.isAssignableFrom(clazz)) {
-			return Optional.of(new ClassDescription(clazz));
-		} else {
-			return Optional.empty();
-		}
-	}
-
-	@Override
-	public Optional<TypeInformation<?>> extract(Class<?> clazz) {
-		if (Value.class.isAssignableFrom(clazz)) {
-			Class<? extends Value> valueClass = clazz.asSubclass(Value.class);
-			return Optional.of(ValueTypeInfo.getValueTypeInfo(valueClass));
+			return Optional.of(new ValueTypeDescription(clazz));
 		} else {
 			return Optional.empty();
 		}
@@ -52,5 +42,18 @@ public class ValueTypeInfoExtractor extends TypeInformationExtractorForClass {
 	@Override
 	public List<Class<?>> getClasses() {
 		return Collections.singletonList(Value.class);
+	}
+
+	class ValueTypeDescription extends ClassDescription {
+
+		public ValueTypeDescription(final Class<?> clazz) {
+			super(clazz);
+		}
+
+		@Override
+		public TypeInformation<?> create() {
+			final Class<? extends Value> valueClass = getClazz().asSubclass(Value.class);
+			return ValueTypeInfo.getValueTypeInfo(valueClass);
+		}
 	}
 }

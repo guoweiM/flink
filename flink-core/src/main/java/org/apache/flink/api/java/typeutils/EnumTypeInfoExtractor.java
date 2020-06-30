@@ -31,17 +31,23 @@ import java.util.Optional;
 public class EnumTypeInfoExtractor extends TypeInformationExtractorForClass {
 
 	public Optional<Type> resolve(final Class<?> clazz) {
-		return Optional.of(new ClassDescription(clazz));
-	}
-
-	@Override
-	@SuppressWarnings("unchecked")
-	public Optional<TypeInformation<?>> extract(Class<?> clazz) {
-		return Optional.of(new EnumTypeInfo(clazz));
+		return Optional.of(new EnumClassDescription(clazz));
 	}
 
 	@Override
 	public List<Class<?>> getClasses() {
 		return Collections.singletonList(Enum.class);
+	}
+
+	class EnumClassDescription extends ClassDescription {
+
+		public EnumClassDescription(final Class<?> clazz) {
+			super(clazz);
+		}
+
+		@Override
+		public TypeInformation<?> create() {
+			return new EnumTypeInfo(getClazz());
+		}
 	}
 }

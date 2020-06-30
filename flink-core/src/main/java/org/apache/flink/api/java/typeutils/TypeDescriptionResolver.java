@@ -18,11 +18,15 @@
 
 package org.apache.flink.api.java.typeutils;
 
+import org.apache.flink.api.common.functions.InvalidTypesException;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableList;
 
 import java.lang.reflect.Type;
-import java.util.ArrayList;
+import java.lang.reflect.TypeVariable;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
@@ -40,13 +44,23 @@ public class TypeDescriptionResolver {
 
 		private final List<Class<?>> extractingClasses;
 
-		public TypeDescriptionResolveContext(final List<Class<?>> extractingClasses) {
+		//TODO:: make it immutable
+		private final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings;
+
+		public TypeDescriptionResolveContext(final List<Class<?>> extractingClasses,
+											 final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings) {
 			this.extractingClasses = extractingClasses;
+			this.typeVariableBindings = typeVariableBindings;
 		}
 
 		@Override
 		public List<Class<?>> getExtractingClasses() {
 			return extractingClasses;
+		}
+
+		@Override
+		public Map<TypeVariable<?>, TypeInformation<?>> getTypeVariableBindings() {
+			return this.typeVariableBindings;
 		}
 
 		@Override
@@ -58,17 +72,26 @@ public class TypeDescriptionResolver {
 			} else {
 				currentExtractingClasses = extractingClasses;
 			}
-			return TypeDescriptionResolver.resolve(type, new TypeDescriptionResolveContext(currentExtractingClasses));
+			return TypeDescriptionResolver.resolve(
+				type,
+				new TypeDescriptionResolveContext(currentExtractingClasses, typeVariableBindings));
 		}
 	}
 
-	static Type resolve(final Type type, final TypeInformationExtractor.ResolveContext resolveContext) {
+	static Type resolve(final Type type, final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings) {
+		final List<Class<?>> currentExtractingClasses = isClassType(type) ? Collections.singletonList(typeToClass(type)) : Collections.emptyList();
+		final Type returnTypeDescription =
+			TypeDescriptionResolver.resolve(type, new TypeDescriptionResolver.TypeDescriptionResolveContext(currentExtractingClasses, typeVariableBindings));
+		return returnTypeDescription;
+	}
+
+	private static Type resolve(final Type type, final TypeInformationExtractor.ResolveContext resolveContext) {
 		return findTypeInfoExtractor(type)
 			.stream()
 			.map(e -> e.resolve(type, resolveContext))
 			.filter(Optional::isPresent)
 			.map(Optional::get)
 			.findFirst()
-			.orElse(type);
+			.orElseThrow(() -> new InvalidTypesException("Type Information could not be created."));
 	}
 }

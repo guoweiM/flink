@@ -22,8 +22,6 @@ import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
-import javax.annotation.Nullable;
-
 import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Type;
@@ -31,10 +29,7 @@ import java.util.Optional;
 
 /**
  * This class is used to extract {@link TypeInformation} for the array type. There are two category array types:
- * {@link GenericArrayType} and {@link Class#isArray()}. This class would use the
- * {@link #extractTypeInformationForGenericArray(Type, TypeInformationExtractor.Context)} and
- * {@link #extractTypeInformationForClassArray(Type, TypeInformationExtractor.Context)} to extract the {@link TypeInformation}
- * for the array type separately.
+ * {@link GenericArrayType} and {@link Class#isArray()}.
  */
 class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
 
@@ -144,58 +139,6 @@ class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtracto
 				context.extract(((ObjectArrayTypeDescription) type).getComponentType());
 			return Optional.of(ObjectArrayTypeInfo.getInfoFor(Array.newInstance(componentTypeInformation.getTypeClass(), 0).getClass(), componentTypeInformation));
 		}
-
-		TypeInformation<?> typeInformation = extractTypeInformationForGenericArray(type, context);
-		if (typeInformation != null) {
-			return Optional.of(typeInformation);
-		}
-		return Optional.ofNullable(extractTypeInformationForClassArray(type, context));
+		return Optional.empty();
 	}
-
-	@Nullable
-	private static TypeInformation<?> extractTypeInformationForGenericArray(final Type type, final TypeInformationExtractor.Context context) {
-
-		final Class<?> classArray;
-
-		if (type instanceof GenericArrayType) {
-			final GenericArrayType genericArray = (GenericArrayType) type;
-
-			final Type componentType = ((GenericArrayType) type).getGenericComponentType();
-			if (componentType instanceof Class) {
-				final Class<?> componentClass = (Class<?>) componentType;
-
-				classArray = (java.lang.reflect.Array.newInstance(componentClass, 0).getClass());
-				return context.extract(classArray);
-			} else {
-				final TypeInformation<?> componentInfo = context.extract(genericArray.getGenericComponentType());
-				return ObjectArrayTypeInfo.getInfoFor(
-					Array.newInstance(componentInfo.getTypeClass(), 0).getClass(), componentInfo);
-			}
-		}
-		return null;
-	}
-
-	@Nullable
-	private static TypeInformation<?> extractTypeInformationForClassArray(final Type type, final TypeInformationExtractor.Context context) {
-
-		if (type instanceof Class && ((Class<?>) type).isArray()) {
-			final Class<?> classArray = (Class<?>) type;
-			// primitive arrays: int[], byte[], ...
-			final PrimitiveArrayTypeInfo<?> primitiveArrayInfo = PrimitiveArrayTypeInfo.getInfoFor(classArray);
-			if (primitiveArrayInfo != null) {
-				return primitiveArrayInfo;
-			}
-
-			// basic type arrays: String[], Integer[], Double[]
-			final BasicArrayTypeInfo<?, ?> basicArrayInfo = BasicArrayTypeInfo.getInfoFor(classArray);
-			if (basicArrayInfo != null) {
-				return basicArrayInfo;
-			} else {
-				final TypeInformation<?> componentTypeInfo = context.extract(classArray.getComponentType());
-				return ObjectArrayTypeInfo.getInfoFor(classArray, componentTypeInfo);
-			}
-		}
-		return null;
-	}
-
 }

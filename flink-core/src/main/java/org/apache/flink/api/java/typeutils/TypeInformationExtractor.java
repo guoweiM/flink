@@ -40,6 +40,8 @@ public interface TypeInformationExtractor {
 
 		List<Class<?>> getExtractingClasses();
 
+		Map<TypeVariable<?>, TypeInformation<?>> getTypeVariableBindings();
+
 		Type resolve(final Type type);
 	}
 

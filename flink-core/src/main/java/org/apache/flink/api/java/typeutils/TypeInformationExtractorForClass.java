@@ -23,8 +23,6 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import java.lang.reflect.Type;
 import java.util.Optional;
 
-import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
-
 /**
  * The extractor extends this class extract the type information of non generic parameter class and also does not need to
  * extract the field's type information.
@@ -33,12 +31,9 @@ public abstract class TypeInformationExtractorForClass implements TypeInformatio
 
 	public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
 		if (type instanceof ClassDescription) {
-			return extract(((ClassDescription) type).getClazz());
+			return Optional.of(((ClassDescription) type).create());
 		}
-		if (!(type instanceof Class)) {
-			return Optional.empty();
-		}
-		return extract(typeToClass(type));
+		return Optional.empty();
 	}
 
 	public Optional<Type> resolve(final Type type, final ResolveContext resolveContext) {
@@ -48,12 +43,13 @@ public abstract class TypeInformationExtractorForClass implements TypeInformatio
 		return Optional.empty();
 	}
 
-	public abstract Optional<Type> resolve(final Class<?> clazz);
-
-	public class ClassDescription extends TypeDescriptionResolver.TypeDescription {
+	/**
+	 * TODO Java Doc.
+	 */
+	public abstract class ClassDescription extends TypeDescriptionResolver.TypeDescription {
 		private final Class<?> clazz;
 
-		public ClassDescription(Class<?> clazz) {
+		public ClassDescription(final Class<?> clazz) {
 			this.clazz = clazz;
 		}
 
@@ -61,12 +57,14 @@ public abstract class TypeInformationExtractorForClass implements TypeInformatio
 			return clazz;
 		}
 
+		public abstract TypeInformation<?> create();
+
 		@Override
 		Type getType() {
 			return clazz;
 		}
 	}
 
-	public abstract Optional<TypeInformation<?>> extract(final Class<?> clazz);
+	public abstract Optional<Type> resolve(final Class<?> clazz);
 
 }

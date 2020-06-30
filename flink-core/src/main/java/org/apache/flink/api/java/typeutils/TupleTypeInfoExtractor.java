@@ -95,9 +95,15 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 	private static class Tuple0Description extends TypeDescription {
 		static final Tuple0Description INSTANCE = new Tuple0Description();
 
+		static final TupleTypeInfo TUPLE0_TYPE_INFO = new TupleTypeInfo(Tuple0.class);
+
 		@Override
 		Type getType() {
 			return Tuple0.class;
+		}
+
+		public TypeInformation<?> create() {
+			return TUPLE0_TYPE_INFO;
 		}
 	}
 
@@ -139,7 +145,7 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 	public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
 
 		if (type instanceof Tuple0Description) {
-			return Optional.of(new TupleTypeInfo(Tuple0.class));
+			return Optional.of(((Tuple0Description) type).create());
 		} else if (type instanceof TupleDescription) {
 			final TupleDescription tupleDescription = (TupleDescription) type;
 			final int typeArgumentsLength = tupleDescription.getTypes().length;
@@ -152,50 +158,7 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 			// return tuple info
 			return Optional.of(new TupleTypeInfo(tupleDescription.getClazz(), subTypesInfo));
 		}
-
-		if (!(isClassType(type) && Tuple.class.isAssignableFrom(typeToClass(type)))) {
-			return Optional.empty();
-		}
-
-		//do not allow usage of Tuple as type
-		if (typeToClass(type).equals(Tuple.class)) {
-			throw new InvalidTypesException(
-				"Usage of class Tuple as a type is not allowed. Use a concrete subclass (e.g. Tuple1, Tuple2, etc.) instead.");
-		}
-
-		if (Tuple0.class.isAssignableFrom(typeToClass(type))) {
-			return Optional.of(new TupleTypeInfo(Tuple0.class));
-		}
-
-		final List<ParameterizedType> typeHierarchy = buildParameterizedTypeHierarchy(type, Tuple.class);
-
-		if (typeHierarchy.size() < 1) {
-			throw new InvalidTypesException("Tuple needs to be parameterized by using generics.");
-		}
-
-		// check if immediate child of Tuple has generics
-		// TODO:: add a test for it
-		if (typeToClass(typeHierarchy.get(typeHierarchy.size() - 1)).getSuperclass() != Tuple.class) {
-			throw new InvalidTypesException("Tuple needs to be parameterized by using generics.");
-		}
-
-		final ParameterizedType curT = typeHierarchy.get(typeHierarchy.size() - 1);
-		final ParameterizedType resolvedType = (ParameterizedType) resolveTypeFromTypeHierarchy(curT, typeHierarchy, true);
-		final int typeArgumentsLength = resolvedType.getActualTypeArguments().length;
-
-		// check the origin type contains additional fields.
-		if (countFieldsInClass(typeToClass(type)) > typeArgumentsLength) {
-			return Optional.empty();
-		}
-
-		// create the type information for the subtypes
-		final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
-
-		for (int i = 0; i < typeArgumentsLength; i++) {
-			subTypesInfo[i] = context.extract(resolvedType.getActualTypeArguments()[i]);
-		}
-		// return tuple info
-		return Optional.of(new TupleTypeInfo(typeToClass(type), subTypesInfo));
+		return Optional.empty();
 	}
 
 	/**
@@ -218,7 +181,15 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 			// not a tuple since it has more fields.
 			// we immediately call analyze Pojo here, because there is currently no other type that can handle such a class.
 			//TODO:: use createType??
-			return PojoTypeInfoExtractor.extract(value.getClass());
+			final Optional<Type> curT =
+				PojoTypeInfoExtractor.INSTANCE.resolve(value.getClass(),
+					new TypeDescriptionResolver.TypeDescriptionResolveContext(Collections.singletonList(value.getClass()), Collections.emptyMap()));
+			if (curT.isPresent()) {
+				//TODO:: maybe we need a not empty current extracting class?? see
+				return PojoTypeInfoExtractor.INSTANCE.extract(curT.get(), TypeInfoExtractContext.CONTEXT);
+			} else {
+				return Optional.empty();
+			}
 		}
 
 		final TypeInformation<?>[] typeInformations = new TypeInformation[numFields];

@@ -32,19 +32,26 @@ public class BaseTypeInfoExtractor extends TypeInformationExtractorForClass {
 
 	public Optional<Type> resolve(final Class<?> clazz) {
 		if (BasicTypeInfo.getClasses().contains(clazz)) {
-			return Optional.of(new ClassDescription(clazz));
+			return Optional.of(new BaseClassDescription(clazz));
 		} else {
-				return Optional.empty();
+			return Optional.empty();
 		}
-	}
-
-	@Override
-	public Optional<TypeInformation<?>> extract(final Class<?> clazz) {
-		return Optional.ofNullable(BasicTypeInfo.getInfoFor(clazz));
 	}
 
 	@Override
 	public List<Class<?>> getClasses() {
 		return BasicTypeInfo.getClasses();
+	}
+
+	class BaseClassDescription extends ClassDescription {
+
+		public BaseClassDescription(final Class<?> clazz) {
+			super(clazz);
+		}
+
+		@Override
+		public TypeInformation<?> create() {
+			return BasicTypeInfo.getInfoFor(this.getClazz());
+		}
 	}
 }

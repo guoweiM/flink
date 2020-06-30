@@ -20,7 +20,6 @@ package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.api.common.functions.InvalidTypesException;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeutils.CompositeType;
 import org.apache.flink.api.java.tuple.Tuple2;
 
 import org.apache.commons.lang3.ClassUtils;
@@ -35,6 +34,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -172,109 +172,14 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 					if (isClassType(t.f0.getGenericType())) {
 						genericClass = typeToClass(t.f0.getGenericType());
 					}
-					pojoFields.add(new PojoField(t.f0, context.extract(genericClass)));
+					pojoFields.add(new PojoField(t.f0, context.extract(new TypeInformationExtractorFinder.GenericTypeInfoExtractor.GenericTypeDescription(genericClass))));
 				}
 			}
 
 			return Optional.of(new PojoTypeInfo<>(pojoTypeDescription.getClazz(), pojoFields));
 		}
 
-		if (!isClassType(type)) {
-			return Optional.empty();
-		}
-		final Class<?> clazz = typeToClass(type);
-
-		if (!Modifier.isPublic(clazz.getModifiers())) {
-			LOG.info("Class " + clazz.getName() + " is not public so it cannot be used as a POJO type " +
-				"and must be processed as GenericType. Please read the Flink documentation " +
-				"on \"Data Types & Serialization\" for details of the effect on performance.");
-			// TODO:: maybe we should return null
-			return Optional.of(new GenericTypeInfo<>(clazz));
-		}
-
-		final List<Field> fields;
-		try {
-			fields = getAllDeclaredFields(clazz, false);
-		} catch (InvalidTypesException e) {
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("Unable to handle type {} " + clazz + " as POJO. Message: " + e.getMessage(), e);
-			}
-			return Optional.empty();
-		}
-		if (fields.size() == 0) {
-			LOG.info("No fields were detected for " + clazz + " so it cannot be used as a POJO type " +
-				"and must be processed as GenericType. Please read the Flink documentation " +
-				"on \"Data Types & Serialization\" for details of the effect on performance.");
-			// TODO:: maybe we should always return null
-			return Optional.of(new GenericTypeInfo<>(clazz));
-		}
-
-		final List<ParameterizedType> typeHierarchy = buildParameterizedTypeHierarchy(type, Object.class);
-
-		List<PojoField> pojoFields = new ArrayList<>();
-		for (Field field : fields) {
-			Type fieldType = field.getGenericType();
-			if (!isValidPojoField(field, clazz, typeHierarchy)) {
-				LOG.info("Class " + clazz + " cannot be used as a POJO type because not all fields are valid POJO fields, " +
-					"and must be processed as GenericType. Please read the Flink documentation " +
-					"on \"Data Types & Serialization\" for details of the effect on performance.");
-				return Optional.empty();
-			}
-			try {
-				final Type resolveFieldType = resolveTypeFromTypeHierarchy(fieldType, typeHierarchy, true);
-
-				pojoFields.add(new PojoField(field, context.extract(resolveFieldType)));
-			} catch (InvalidTypesException e) {
-				// TODO:: This exception handle leads to inconsistent behaviour when Tuple & TypeFactory fail.
-				Class<?> genericClass = Object.class;
-				if (isClassType(fieldType)) {
-					genericClass = typeToClass(fieldType);
-				}
-				pojoFields.add(new PojoField(field, new GenericTypeInfo<>(genericClass)));
-			}
-		}
-
-		CompositeType<?> pojoType = new PojoTypeInfo<>(clazz, pojoFields);
-
-		//
-		// Validate the correctness of the pojo.
-		// returning "null" will result create a generic type information.
-		//
-		List<Method> methods = getAllDeclaredMethods(clazz);
-		for (Method method : methods) {
-			if (method.getName().equals("readObject") || method.getName().equals("writeObject")) {
-				LOG.info("Class " + clazz + " contains custom serialization methods we do not call, so it cannot be used as a POJO type " +
-					"and must be processed as GenericType. Please read the Flink documentation " +
-					"on \"Data Types & Serialization\" for details of the effect on performance.");
-				return Optional.empty();
-			}
-		}
-
-		// Try retrieving the default constructor, if it does not have one
-		// we cannot use this because the serializer uses it.
-		Constructor defaultConstructor = null;
-		try {
-			defaultConstructor = clazz.getDeclaredConstructor();
-		} catch (NoSuchMethodException e) {
-			if (clazz.isInterface() || Modifier.isAbstract(clazz.getModifiers())) {
-				LOG.info(clazz + " is abstract or an interface, having a concrete "
-					+ "type can increase performance.");
-			} else {
-				LOG.info(clazz + " is missing a default constructor so it cannot be used as a POJO type "
-					+ "and must be processed as GenericType. Please read the Flink documentation "
-					+ "on \"Data Types & Serialization\" for details of the effect on performance.");
-				return Optional.empty();
-			}
-		}
-		if (defaultConstructor != null && !Modifier.isPublic(defaultConstructor.getModifiers())) {
-			LOG.info("The default constructor of " + clazz + " is not Public so it cannot be used as a POJO type "
-				+ "and must be processed as GenericType. Please read the Flink documentation "
-				+ "on \"Data Types & Serialization\" for details of the effect on performance.");
-			return Optional.empty();
-		}
-
-		// everything is checked, we return the pojo
-		return Optional.of(pojoType);
+		return Optional.empty();
 	}
 
 	/**
@@ -346,7 +251,17 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 
 	// make this method public only for the avro extraction
 	public static Optional<TypeInformation<?>> extract(final Type type) {
-		return INSTANCE.extract(type, TypeInfoExtractContext.CONTEXT);
+		//TODO:: use createType??
+		final List<Class<?>> currentExtractingClasses = isClassType(type) ? Collections.singletonList(typeToClass(type)) : Collections.emptyList();
+
+		final Optional<Type> curT =
+			PojoTypeInfoExtractor.INSTANCE.resolve(type,
+				new TypeDescriptionResolver.TypeDescriptionResolveContext(currentExtractingClasses, Collections.emptyMap()));
+		if (curT.isPresent()) {
+			//TODO:: maybe we need a not empty current extracting class?? see
+			return PojoTypeInfoExtractor.INSTANCE.extract(curT.get(), TypeInfoExtractContext.CONTEXT);
+		}
+		return Optional.empty();
 	}
 
 	class PojoTypeDescription extends TypeDescriptionResolver.TypeDescription {

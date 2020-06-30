@@ -38,18 +38,25 @@ public class SQLTimeTypeInfoExtractor extends TypeInformationExtractorForClass {
 
 	public Optional<Type> resolve(final Class<?> clazz) {
 		if (CLASS_LIST.contains(clazz)) {
-			return Optional.of(new ClassDescription((clazz)));
+			return Optional.of(new SQLTimeTypeDescription(clazz));
 		}
 		return Optional.empty();
 	}
 
 	@Override
-	public Optional<TypeInformation<?>> extract(final Class<?> clazz) {
-		return Optional.ofNullable(SqlTimeTypeInfo.getInfoFor(clazz));
-	}
-
-	@Override
 	public List<Class<?>> getClasses() {
 		return CLASS_LIST;
+	}
+
+	class SQLTimeTypeDescription extends ClassDescription {
+
+		public SQLTimeTypeDescription(final Class<?> clazz) {
+			super(clazz);
+		}
+
+		@Override
+		public TypeInformation<?> create() {
+			return SqlTimeTypeInfo.getInfoFor(getClazz());
+		}
 	}
 }
