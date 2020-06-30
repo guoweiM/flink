@@ -21,7 +21,6 @@ package org.apache.flink.api.java.typeutils;
 import org.apache.flink.api.common.typeinfo.SqlTimeTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
-import java.lang.reflect.Type;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -30,13 +29,14 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Extract TypeInformation for SQL Time Type.
+ * Resolve {@link SQLTimeTypeDescription} for SQL Time Type.
  */
 public class SQLTimeTypeInfoExtractor extends TypeInformationExtractorForClass {
 
 	private static final List<Class<?>> CLASS_LIST = Arrays.asList(Date.class, Time.class, Timestamp.class);
 
-	public Optional<Type> resolve(final Class<?> clazz) {
+	@Override
+	public Optional<TypeDescription> resolve(final Class<?> clazz) {
 		if (CLASS_LIST.contains(clazz)) {
 			return Optional.of(new SQLTimeTypeDescription(clazz));
 		}

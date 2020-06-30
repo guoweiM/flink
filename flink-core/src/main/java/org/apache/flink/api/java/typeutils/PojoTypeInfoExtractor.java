@@ -46,7 +46,7 @@ import static org.apache.flink.api.java.typeutils.TypeHierarchyBuilder.buildPara
 import static org.apache.flink.api.java.typeutils.TypeResolver.resolveTypeFromTypeHierarchy;
 
 /**
- * This class extracts pojo type information.
+ * This class resolve the {@link PojoTypeDescription} for the POJO type.
  */
 public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
 
@@ -54,8 +54,14 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 
 	private static final Logger LOG = LoggerFactory.getLogger(PojoTypeInfoExtractor.class);
 
+	/**
+	 * Resolve the {@link PojoTypeDescription} for the POJO type.
+	 * @param type the type needed to compute the {@link TypeDescription}.
+	 * @param context used to resolve the {@link TypeDescription} for the generic parameters or components.
+	 * @return the {@link PojoTypeDescription} or {@link Optional#empty()} if the type is not a pojo type
+	 */
 	@Override
-	public Optional<Type> resolve(final Type type, final ResolveContext context) {
+	public Optional<TypeDescription> resolve(final Type type, final Context context) {
 		if (!isClassType(type)) {
 			return Optional.empty();
 		}
@@ -86,7 +92,7 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 
 		final List<ParameterizedType> typeHierarchy = buildParameterizedTypeHierarchy(type, Object.class);
 
-		final List<Tuple2<Field, Type>> pojoFieldTypeDescriptions = new ArrayList<>();
+		final List<Tuple2<Field, TypeDescription>> pojoFieldTypeDescriptions = new ArrayList<>();
 		for (Field field : fields) {
 			Type fieldType = field.getGenericType();
 			if (!isValidPojoField(field, clazz, typeHierarchy)) {
@@ -97,7 +103,7 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 			}
 			try {
 				final Type resolveFieldType = resolveTypeFromTypeHierarchy(fieldType, typeHierarchy, true);
-				final Type resolveFieldTypeDescription = context.resolve(resolveFieldType);
+				final TypeDescription resolveFieldTypeDescription = context.resolve(resolveFieldType);
 
 				pojoFieldTypeDescriptions.add(Tuple2.of(field, resolveFieldTypeDescription));
 			} catch (InvalidTypesException e) {
@@ -106,7 +112,7 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 				if (isClassType(fieldType)) {
 					genericClass = typeToClass(fieldType);
 				}
-				pojoFieldTypeDescriptions.add(Tuple2.of(field, new TypeInformationExtractorFinder.GenericTypeInfoExtractor.GenericTypeDescription(genericClass)));
+				pojoFieldTypeDescriptions.add(Tuple2.of(field, new GenericTypeInfoExtractor.GenericTypeDescription(genericClass)));
 			}
 		}
 
@@ -149,38 +155,6 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 		}
 
 		return Optional.of(new PojoTypeDescription(clazz, pojoFieldTypeDescriptions));
-	}
-
-	/**
-	 * Extract the {@link TypeInformation} for the POJO type.
-	 * @param type the type needed to extract {@link TypeInformation}
-	 * @param context used to extract the {@link TypeInformation} for the generic parameters or field components.
-	 * @return the {@link TypeInformation} of the given type or {@link Optional#empty()} if the type is not a pojo type
-	 */
-	public Optional<TypeInformation<?>> extract(final Type type, final TypeInformationExtractor.Context context) {
-
-		if (type instanceof PojoTypeDescription) {
-			return Optional.of(((PojoTypeDescription) type).create());
-//			final PojoTypeDescription pojoTypeDescription = (PojoTypeDescription) type;
-//			List<PojoField> pojoFields = new ArrayList<>();
-//
-//			for (Tuple2<Field, Type> t : pojoTypeDescription.getFields()) {
-//				try {
-//					pojoFields.add(new PojoField(t.f0, context.extract(t.f1)));
-//				} catch (InvalidTypesException e) {
-//					// TODO:: This exception handle leads to inconsistent behaviour when Tuple & TypeFactory fail.
-//					Class<?> genericClass = Object.class;
-//					if (isClassType(t.f0.getGenericType())) {
-//						genericClass = typeToClass(t.f0.getGenericType());
-//					}
-//					pojoFields.add(new PojoField(t.f0, context.extract(new TypeInformationExtractorFinder.GenericTypeInfoExtractor.GenericTypeDescription(genericClass))));
-//				}
-//			}
-//
-//			return Optional.of(new PojoTypeInfo<>(pojoTypeDescription.getClazz(), pojoFields));
-		}
-
-		return Optional.empty();
 	}
 
 	/**
@@ -255,55 +229,40 @@ public class PojoTypeInfoExtractor extends AutoRegisterDisabledTypeInformationEx
 		//TODO:: use createType??
 		final List<Class<?>> currentExtractingClasses = isClassType(type) ? Collections.singletonList(typeToClass(type)) : Collections.emptyList();
 
-		final Optional<Type> curT =
+		final Optional<TypeDescription> curT =
 			PojoTypeInfoExtractor.INSTANCE.resolve(type,
-				new TypeDescriptionResolver.TypeDescriptionResolveContext(currentExtractingClasses, Collections.emptyMap()));
+				new TypeDescriptionContext(currentExtractingClasses, Collections.emptyMap()));
 		if (curT.isPresent()) {
-			//TODO:: maybe we need a not empty current extracting class?? see
-			return PojoTypeInfoExtractor.INSTANCE.extract(curT.get(), TypeInfoExtractContext.CONTEXT);
+			return Optional.of(curT.get().create());
 		}
 		return Optional.empty();
 	}
 
-	class PojoTypeDescription extends TypeDescriptionResolver.TypeDescription {
+	class PojoTypeDescription implements TypeDescription {
 
-		private final List<Tuple2<Field, Type>> fields;
+		private final List<Tuple2<Field, TypeDescription>> fields;
 
 		private final Class<?> clazz;
 
-		public PojoTypeDescription(final Class<?> clazz, final List<Tuple2<Field, Type>> fields) {
+		public PojoTypeDescription(final Class<?> clazz, final List<Tuple2<Field, TypeDescription>> fields) {
 			this.clazz = clazz;
 			this.fields = fields;
 		}
 
-		public List<Tuple2<Field, Type>> getFields() {
-			return fields;
-		}
-
-		public Class<?> getClazz() {
-			return clazz;
-		}
-
 		@Override
-		Type getType() {
-			return clazz;
-		}
+		public TypeInformation<?> create() {
+			final List<PojoField> pojoFields = new ArrayList<>();
 
-		@Override
-		TypeInformation<?> create() {
-			List<PojoField> pojoFields = new ArrayList<>();
-
-			for (Tuple2<Field, Type> t : fields) {
+			for (Tuple2<Field, TypeDescription> t : fields) {
 				try {
-					TypeDescriptionResolver.TypeDescription typeDescription = (TypeDescriptionResolver.TypeDescription) t.f1;
-					pojoFields.add(new PojoField(t.f0, typeDescription.create()));
+					pojoFields.add(new PojoField(t.f0, t.f1.create()));
 				} catch (InvalidTypesException e) {
 					// TODO:: This exception handle leads to inconsistent behaviour when Tuple & TypeFactory fail.
 					Class<?> genericClass = Object.class;
 					if (isClassType(t.f0.getGenericType())) {
 						genericClass = typeToClass(t.f0.getGenericType());
 					}
-					pojoFields.add(new PojoField(t.f0, new TypeInformationExtractorFinder.GenericTypeInfoExtractor.GenericTypeDescription(genericClass).create()));
+					pojoFields.add(new PojoField(t.f0, new GenericTypeInfoExtractor.GenericTypeDescription(genericClass).create()));
 				}
 			}
 

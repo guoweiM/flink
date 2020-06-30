@@ -19,12 +19,10 @@
 package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.functions.InvalidTypesException;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.util.Preconditions;
 
 import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NavigableMap;
@@ -125,158 +123,6 @@ class TypeInformationExtractorFinder {
 				.forEach(typeInformationExtractor -> typeInformationExtractor.getClasses()
 					.forEach(c -> EXTRACTORS.put(c, typeInformationExtractor))
 				);
-		}
-	}
-
-	private static class TypeVariableExtractor extends AutoRegisterDisabledTypeInformationExtractor {
-
-		static final TypeVariableExtractor INSTANCE = new TypeVariableExtractor();
-
-		@Override
-		public Optional<Type> resolve(final Type type, final ResolveContext context) {
-			if (type instanceof TypeVariable) {
-				final TypeVariable typeVariable = (TypeVariable) type;
-				return Optional.of(new TypeVariableDescription(typeVariable, context.getTypeVariableBindings().get(typeVariable)));
-			}
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
-			if (type instanceof TypeVariableDescription) {
-				return Optional.of(((TypeVariableDescription) type).create());
-			} else {
-				return Optional.empty();
-			}
-		}
-
-		static class TypeVariableDescription extends TypeDescriptionResolver.TypeDescription {
-
-			//TODO:: maybe we should remove this field?
-			private final TypeVariable<?> typeVariable;
-
-			private final TypeInformation<?> typeInformationOfTypeVariable;
-
-			public TypeVariableDescription(final TypeVariable<?> typeVariable, final TypeInformation<?> typeInformationOfTypeVariable) {
-				this.typeVariable = typeVariable;
-				this.typeInformationOfTypeVariable = typeInformationOfTypeVariable;
-			}
-
-			public TypeInformation<?> create() {
-				if (typeInformationOfTypeVariable == null) {
-					throw new InvalidTypesException("Type of TypeVariable '" + typeVariable.getName() + "' in '"
-						+ typeVariable.getGenericDeclaration() + "' could not be determined. This is most likely a type erasure problem. "
-						+ "The type extraction currently supports types with generic variables only in cases where "
-						+ "all variables in the return type can be deduced from the input type(s). "
-						+ "Otherwise the type has to be specified explicitly using type information.");
-				}
-				return typeInformationOfTypeVariable;
-			}
-
-			@Override
-			Type getType() {
-				return typeVariable;
-			}
-		}
-	}
-
-	private static class RecursiveTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
-
-		static final RecursiveTypeInfoExtractor INSTANCE = new RecursiveTypeInfoExtractor();
-
-		public Optional<Type> resolve(final Type type, final ResolveContext context) {
-			if (isClassType(type)) {
-				final Class<?> typeClass = typeToClass(type);
-				if (countTypeInHierarchy(context.getExtractingClasses(), typeClass) > 1) {
-					return Optional.of(new RecursiveTypeDescription(typeClass));
-				}
-			}
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<TypeInformation<?>> extract(Type type, Context context) {
-			if (type instanceof RecursiveTypeDescription) {
-				return Optional.of(((RecursiveTypeDescription) type).create());
-			}
-			return Optional.empty();
-		}
-
-		/**
-		 * @return number of items with equal type or same raw type
-		 */
-		private static int countTypeInHierarchy(List<Class<?>> typeHierarchy, Type type) {
-			int count = 0;
-			for (Type t : typeHierarchy) {
-				if (t == type || (isClassType(type) && t == typeToClass(type)) || (isClassType(t) && typeToClass(t) == type)) {
-					count++;
-				}
-			}
-			return count;
-		}
-
-		class RecursiveTypeDescription extends TypeDescriptionResolver.TypeDescription {
-
-			private final Class<?> clazz;
-
-			public RecursiveTypeDescription(final Class<?> clazz) {
-				this.clazz = clazz;
-			}
-
-			public TypeInformation<?> create() {
-				return new GenericTypeInfo<>(clazz);
-			}
-
-			@Override
-			Type getType() {
-				return clazz;
-			}
-
-			public Class<?> getClazz() {
-				return clazz;
-			}
-		}
-	}
-
-	static class GenericTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
-
-		static final GenericTypeInfoExtractor INSTANCE = new GenericTypeInfoExtractor();
-
-		public Optional<Type> resolve(final Type type, final ResolveContext context) {
-			if (isClassType(type)) {
-				return Optional.of(new GenericTypeDescription(typeToClass(type)));
-			}
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
-			if (type instanceof GenericTypeDescription) {
-				return Optional.of(((GenericTypeDescription) type).create());
-			}
-			return Optional.empty();
-		}
-
-		public static class GenericTypeDescription extends TypeDescriptionResolver.TypeDescription {
-
-			private final Class<?> clazz;
-
-			public GenericTypeDescription(Class<?> clazz) {
-				this.clazz = clazz;
-			}
-
-			public TypeInformation<?> create() {
-				return new GenericTypeInfo<>(clazz);
-			}
-
-			public Class<?> getClazz() {
-				return clazz;
-			}
-
-			@Override
-			Type getType() {
-				return clazz;
-			}
 		}
 	}
 }

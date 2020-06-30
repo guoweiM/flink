@@ -20,34 +20,15 @@ package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
 /**
- * 	Resolve the {@link TypeDescription} for {@link Enum} type.
+ *
  */
-public class EnumTypeInfoExtractor extends TypeInformationExtractorForClass {
+public interface TypeDescription {
 
-	@Override
-	public Optional<TypeDescription> resolve(final Class<?> clazz) {
-		return Optional.of(new EnumClassDescription(clazz));
-	}
+	/**
+	 *
+	 * @return
+	 */
+    TypeInformation<?> create();
 
-	@Override
-	public List<Class<?>> getClasses() {
-		return Collections.singletonList(Enum.class);
-	}
-
-	class EnumClassDescription extends ClassDescription {
-
-		public EnumClassDescription(final Class<?> clazz) {
-			super(clazz);
-		}
-
-		@Override
-		public TypeInformation<?> create() {
-			return new EnumTypeInfo(getClazz());
-		}
-	}
 }

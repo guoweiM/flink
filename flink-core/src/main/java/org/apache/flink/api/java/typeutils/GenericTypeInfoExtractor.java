@@ -20,34 +20,35 @@ package org.apache.flink.api.java.typeutils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
-import java.util.Collections;
-import java.util.List;
+import java.lang.reflect.Type;
 import java.util.Optional;
 
-/**
- * 	Resolve the {@link TypeDescription} for {@link Enum} type.
- */
-public class EnumTypeInfoExtractor extends TypeInformationExtractorForClass {
+import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
+import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
+
+class GenericTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
+
+	static final GenericTypeInfoExtractor INSTANCE = new GenericTypeInfoExtractor();
 
 	@Override
-	public Optional<TypeDescription> resolve(final Class<?> clazz) {
-		return Optional.of(new EnumClassDescription(clazz));
+	public Optional<TypeDescription> resolve(final Type type, final Context context) {
+		if (isClassType(type)) {
+			return Optional.of(new GenericTypeDescription(typeToClass(type)));
+		}
+		return Optional.empty();
 	}
 
-	@Override
-	public List<Class<?>> getClasses() {
-		return Collections.singletonList(Enum.class);
-	}
+	public static class GenericTypeDescription implements TypeDescription {
 
-	class EnumClassDescription extends ClassDescription {
+		private final Class<?> clazz;
 
-		public EnumClassDescription(final Class<?> clazz) {
-			super(clazz);
+		public GenericTypeDescription(Class<?> clazz) {
+			this.clazz = clazz;
 		}
 
 		@Override
 		public TypeInformation<?> create() {
-			return new EnumTypeInfo(getClazz());
+			return new GenericTypeInfo<>(clazz);
 		}
 	}
 }

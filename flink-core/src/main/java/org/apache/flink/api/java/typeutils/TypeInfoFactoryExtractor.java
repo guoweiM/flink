@@ -39,14 +39,22 @@ import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClas
 import static org.apache.flink.api.java.typeutils.TypeResolver.resolveTypeFromTypeHierarchy;
 
 /**
- * This class is used to extract the {@link org.apache.flink.api.common.typeinfo.TypeInformation} of the class that has
- * the {@link org.apache.flink.api.common.typeinfo.TypeInfo} annotation.
+ * This class is used to compute the {@link TypeInfoFactoryDescriptor} for the class that has {@link TypeInfo} annotation in
+ * it's type hierarchy.
  */
 public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformationExtractor {
 
 	public static final TypeInfoFactoryExtractor INSTANCE = new TypeInfoFactoryExtractor();
 
-	public Optional<Type> resolve(final Type type, final ResolveContext context) {
+	/**
+	 * Find the first type that has the {@link TypeInfo} annotation in the type hierarchy of given type. Then create a
+	 * {@link TypeInfoFactoryDescriptor} according to its generic parameters.
+	 * @param type  the type needed to compute a {@link TypeDescription}
+	 * @param context used to resolve the {@link TypeDescription} for the generic parameters or components.
+	 * @return the {@link TypeInfoFactoryDescriptor} if finding a type that has the annotation or {@link Optional#empty()} if can not find one.
+	 * @throws InvalidTypesException if error occurs when resolving the generic parameter.
+	 */
+	public Optional<TypeDescription> resolve(final Type type, final Context context) {
 		final Tuple3<Type, List<ParameterizedType>, TypeInfoFactory<?>> result = buildTypeHierarchy(type);
 
 		if (result == null) {
@@ -54,14 +62,13 @@ public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformatio
 		}
 
 		final Type resolvedFactoryDefiningType = resolveTypeFromTypeHierarchy(result.f0, result.f1, true);
-		final Map<String, Type> genericParams;
+		final Map<String, TypeDescription> genericParams;
 
 		if (resolvedFactoryDefiningType instanceof ParameterizedType) {
 			genericParams = new HashMap<>();
 			final Type[] genericTypes = ((ParameterizedType) resolvedFactoryDefiningType).getActualTypeArguments();
 			final Type[] args = typeToClass(resolvedFactoryDefiningType).getTypeParameters();
 			for (int i = 0; i < genericTypes.length; i++) {
-				// the user should deal exception
 				genericParams.put(args[i].toString(),  context.resolve(genericTypes[i]));
 			}
 		} else {
@@ -71,37 +78,29 @@ public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformatio
 		return Optional.of(new TypeInfoFactoryDescriptor(typeToClass(type), result.f2, genericParams));
 	}
 
-	static class TypeInfoFactoryDescriptor extends TypeDescriptionResolver.TypeDescription {
+	static class TypeInfoFactoryDescriptor implements TypeDescription {
 
-		private final Map<String, Type> genericParams;
+		private final Map<String, TypeDescription> genericParams;
 
 		private final TypeInfoFactory<?> typeInfoFactory;
 
 		private final Class<?> clazz;
 
-		public TypeInfoFactoryDescriptor(final Class<?> clazz, final TypeInfoFactory<?> typeInfoFactory, final Map<String, Type> genericParams) {
+		public TypeInfoFactoryDescriptor(final Class<?> clazz, final TypeInfoFactory<?> typeInfoFactory, final Map<String, TypeDescription> genericParams) {
 			this.clazz = clazz;
 			this.typeInfoFactory = typeInfoFactory;
 			this.genericParams = genericParams;
 		}
 
-		public Class<?> getClazz() {
-			return clazz;
-		}
-
-		public Type getType() {
-			return clazz;
-		}
-
 		@Override
-		TypeInformation<?> create() {
+		public TypeInformation<?> create() {
 
 			final Map<String, TypeInformation<?>> typeInformationOfGenericParams;
 
 			if (!genericParams.isEmpty()) {
 				typeInformationOfGenericParams = new HashMap<>();
 				for (String name : genericParams.keySet()) {
-					typeInformationOfGenericParams.put(name, ((TypeDescriptionResolver.TypeDescription) genericParams.get(name)).create());
+					typeInformationOfGenericParams.put(name, genericParams.get(name).create());
 				}
 			} else {
 				typeInformationOfGenericParams = Collections.emptyMap();
@@ -112,21 +111,6 @@ public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformatio
 			}
 			return createdTypeInfo;
 		}
-	}
-
-	/**
-	 * Extract {@link TypeInformation} for the type that has {@link TypeInfo} annotation.
-	 * @param type  the type needed to extract {@link TypeInformation}
-	 * @param context used to extract the {@link TypeInformation} for the generic parameters or components.
-	 * @return the {@link TypeInformation} of the given type or {@link Optional#empty()} if the type does not have the annotation
-	 * @throws InvalidTypesException if the factory does not create a valid {@link TypeInformation} or if creating generic type failed
-	 */
-	public Optional<TypeInformation<?>> extract(final Type type, final TypeInformationExtractor.Context context) {
-
-		if (type instanceof TypeInfoFactoryDescriptor) {
-			return Optional.of(((TypeInfoFactoryDescriptor) type).create());
-		}
-		return Optional.empty();
 	}
 
 	/**

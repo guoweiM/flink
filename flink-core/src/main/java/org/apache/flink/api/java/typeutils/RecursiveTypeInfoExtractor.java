@@ -21,41 +21,51 @@ package org.apache.flink.api.java.typeutils;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 import java.lang.reflect.Type;
+import java.util.List;
 import java.util.Optional;
 
-/**
- * The extractor extending this class resolves {@link TypeDescription} of non generic parameter class and also does not need to
- * resolve the field's {@link TypeDescription}.
- */
-public abstract class TypeInformationExtractorForClass implements TypeInformationExtractor {
+import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
+import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
+
+class RecursiveTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
+
+	static final RecursiveTypeInfoExtractor INSTANCE = new RecursiveTypeInfoExtractor();
 
 	@Override
 	public Optional<TypeDescription> resolve(final Type type, final Context context) {
-		if (type instanceof Class) {
-			return resolve((Class<?>)type);
+		if (isClassType(type)) {
+			final Class<?> typeClass = typeToClass(type);
+			if (countTypeInHierarchy(context.getExtractingClasses(), typeClass) > 1) {
+				return Optional.of(new RecursiveTypeDescription(typeClass));
+			}
 		}
 		return Optional.empty();
 	}
 
 	/**
-	 * The descriptor is used to create non generic parameter class's {@link TypeInformation}.
+	 * @return number of items with equal type or same raw type
 	 */
-	public abstract class ClassDescription implements TypeDescription {
+	private static int countTypeInHierarchy(List<Class<?>> typeHierarchy, Type type) {
+		int count = 0;
+		for (Type t : typeHierarchy) {
+			if (t == type || (isClassType(type) && t == typeToClass(type)) || (isClassType(t) && typeToClass(t) == type)) {
+				count++;
+			}
+		}
+		return count;
+	}
+
+	class RecursiveTypeDescription implements TypeDescription {
 
 		private final Class<?> clazz;
 
-		public ClassDescription(final Class<?> clazz) {
+		public RecursiveTypeDescription(final Class<?> clazz) {
 			this.clazz = clazz;
 		}
 
-		public Class<?> getClazz() {
-			return clazz;
-		}
-
 		@Override
-		public abstract TypeInformation<?> create();
+		public TypeInformation<?> create() {
+			return new GenericTypeInfo<>(clazz);
+		}
 	}
-
-	public abstract Optional<TypeDescription> resolve(final Class<?> clazz);
-
 }

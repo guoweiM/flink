@@ -22,7 +22,6 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.common.functions.InvalidTypesException;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Array;
@@ -301,10 +300,6 @@ public class TypeExtractionUtils {
 	 * Convert ParameterizedType or Class to a Class.
 	 */
 	public static Class<?> typeToClass(Type t) {
-		if (t instanceof TypeDescriptionResolver.TypeDescription) {
-			t = ((TypeDescriptionResolver.TypeDescription) t).getType();
-		}
-
 		if (t instanceof Class) {
 			return (Class<?>) t;
 		}
@@ -318,9 +313,6 @@ public class TypeExtractionUtils {
 	 * Checks if a type can be converted to a Class. This is true for ParameterizedType and Class.
 	 */
 	public static boolean isClassType(Type t) {
-		if (t instanceof TypeDescriptionResolver.TypeDescription) {
-			t = ((TypeDescriptionResolver.TypeDescription) t).getType();
-		}
 		return t instanceof Class<?> || t instanceof ParameterizedType;
 	}
 
@@ -404,16 +396,16 @@ public class TypeExtractionUtils {
 
 	/**
 	 * This method finds all the extractor candidates that might handle the given type and return result of first extractor
-	 * that could extract the {@link TypeInformation} of given type.
-	 * @param type the type needed to extract {@link TypeInformation}
+	 * that could resolve the {@link TypeDescription} of given type.
+	 * @param type the type needed to compute {@link TypeDescription}
 	 * @param context the context used by the extractors
-	 * @return {@link TypeInformation} of the given type
+	 * @return {@link TypeDescription} of the given type
 	 * @throws InvalidTypesException if no extractor could handle the type.
 	 */
-	static TypeInformation<?> extract(final Type type, final TypeInformationExtractor.Context context) {
+	static TypeDescription resolve(final Type type, final TypeInformationExtractor.Context context) {
 		return findTypeInfoExtractor(type)
 			.stream()
-			.map(e -> e.extract(type, context))
+			.map(e -> e.resolve(type, context))
 			.filter(Optional::isPresent)
 			.map(Optional::get)
 			.findFirst()

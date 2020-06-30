@@ -22,7 +22,6 @@ import org.apache.flink.api.common.functions.InvalidTypesException;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple0;
-import org.apache.flink.api.java.typeutils.TypeDescriptionResolver.TypeDescription;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -39,7 +38,7 @@ import static org.apache.flink.api.java.typeutils.TypeHierarchyBuilder.buildPara
 import static org.apache.flink.api.java.typeutils.TypeResolver.resolveTypeFromTypeHierarchy;
 
 /**
- * This class is used to extract {@link TupleTypeInfo}.
+ * This class is used to resolve {@link TupleDescription}.
  */
 public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 
@@ -48,7 +47,15 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 		return Collections.singletonList(Tuple.class);
 	}
 
-	public Optional<Type> resolve(final Type type, final ResolveContext context) {
+	/**
+	 * Resolve the {@link TupleDescription} for the {@link Tuple}.
+	 * @param type the type needed to compute {@link TypeDescription}.
+	 * @param context used to resolve the {@link TypeDescription} for the generic parameters or components.
+	 * @return the {@link TupleDescription} or {@link Optional#empty()} if the given type is not a Tuple.
+	 * @throws InvalidTypesException if the immediate child of {@link Tuple} is not a generic class or if the child of {@link Tuple}
+	 * is not a generic class or if the type equals {@link Tuple}
+	 */
+	public Optional<TypeDescription> resolve(final Type type, final Context context) {
 
 		if (!(isClassType(type) && Tuple.class.isAssignableFrom(typeToClass(type)))) {
 			return Optional.empty();
@@ -85,83 +92,47 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 		}
 		final ParameterizedType resolvedType = (ParameterizedType) resolveTypeFromTypeHierarchy(curT, typeHierarchy, true);
 
-		final Type[] types = new Type[resolvedType.getActualTypeArguments().length];
+		final TypeDescription[] types = new TypeDescription[resolvedType.getActualTypeArguments().length];
 		for (int i = 0; i < typeArgumentsLength; i++) {
 			types[i] = context.resolve(resolvedType.getActualTypeArguments()[i]);
 		}
 		return Optional.of(new TupleDescription(typeToClass(type), types));
 	}
 
-	private static class Tuple0Description extends TypeDescription {
+	private static class Tuple0Description implements TypeDescription {
 		static final Tuple0Description INSTANCE = new Tuple0Description();
 
 		static final TupleTypeInfo TUPLE0_TYPE_INFO = new TupleTypeInfo(Tuple0.class);
 
 		@Override
-		Type getType() {
-			return Tuple0.class;
-		}
-
 		public TypeInformation<?> create() {
 			return TUPLE0_TYPE_INFO;
 		}
 	}
 
-	private static class TupleDescription extends TypeDescription {
+	private static class TupleDescription implements TypeDescription {
 
-		private final Type[] types;
+		private final TypeDescription[] types;
 
 		private final Class<?> clazz;
 
-		TupleDescription(final Class<?> clazz, final Type[] typeDescriptions) {
+		TupleDescription(final Class<?> clazz, final TypeDescription[] typeDescriptions) {
 			this.clazz = clazz;
 			this.types = typeDescriptions;
 		}
 
+		@Override
 		public TypeInformation<?> create() {
 			final int typeArgumentsLength = types.length;
 			// create the type information for the subtypes
 			final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
 
 			for (int i = 0; i < typeArgumentsLength; i++) {
-				subTypesInfo[i] = ((TypeDescription) types[i]).create();
+				subTypesInfo[i] = types[i].create();
 			}
 			// return tuple info
 			return new TupleTypeInfo(clazz, subTypesInfo);
 		}
-
-		public Type[] getTypes() {
-			return types;
-		}
-
-		@Override
-		Type getType() {
-			return clazz;
-		}
-
-		public Class<?> getClazz() {
-			return clazz;
-		}
-	}
-
-	/**
-	 * Extract the {@link TypeInformation} for the {@link Tuple}.
-	 * @param type the type needed to extract {@link TypeInformation}
-	 * @param context used to extract the {@link TypeInformation} for the generic parameters or components.
-	 * @return the {@link TypeInformation} of the type or {@link Optional#empty()} if the type information of the generic parameter of
-	 * the {@link Tuple} could not be extracted
-	 * @throws InvalidTypesException if the immediate child of {@link Tuple} is not a generic class or if the child of {@link Tuple}
-	 * is not a generic class or if the type equals {@link Tuple}
-	 */
-	@SuppressWarnings("unchecked")
-	public Optional<TypeInformation<?>> extract(final Type type, final Context context) {
-
-		if (type instanceof Tuple0Description) {
-			return Optional.of(((Tuple0Description) type).create());
-		} else if (type instanceof TupleDescription) {
-			return Optional.of(((TupleDescription) type).create());
-		}
-		return Optional.empty();
 	}
 
 	/**
@@ -184,12 +155,12 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 			// not a tuple since it has more fields.
 			// we immediately call analyze Pojo here, because there is currently no other type that can handle such a class.
 			//TODO:: use createType??
-			final Optional<Type> curT =
+			final Optional<TypeDescription> curT =
 				PojoTypeInfoExtractor.INSTANCE.resolve(value.getClass(),
-					new TypeDescriptionResolver.TypeDescriptionResolveContext(Collections.singletonList(value.getClass()), Collections.emptyMap()));
+					new TypeDescriptionContext(Collections.singletonList(value.getClass()), Collections.emptyMap()));
 			if (curT.isPresent()) {
 				//TODO:: maybe we need a not empty current extracting class?? see
-				return PojoTypeInfoExtractor.INSTANCE.extract(curT.get(), TypeInfoExtractContext.CONTEXT);
+				return Optional.of(curT.get().create());
 			} else {
 				return Optional.empty();
 			}

@@ -19,12 +19,12 @@
 package org.apache.flink.formats.avro.typeutils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.typeutils.TypeDescription;
 import org.apache.flink.api.java.typeutils.TypeInformationExtractorForClass;
 import org.apache.flink.formats.avro.utils.AvroKryoSerializerUtils;
 
 import org.apache.avro.specific.SpecificRecordBase;
 
-import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -32,13 +32,14 @@ import java.util.Optional;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isAvroType;
 
 /**
- * Extract {@link TypeInformation} for avro type.
+ * Resolve {@link TypeDescription} for avro type.
  */
 public class AvroTypeInfoExtractor extends TypeInformationExtractorForClass {
 
 	private final AvroKryoSerializerUtils avroKryoSerializerUtils = new AvroKryoSerializerUtils();
 
-	public Optional<Type> resolve(final Class<?> clazz) {
+	@Override
+	public Optional<TypeDescription> resolve(final Class<?> clazz) {
 		if (isAvroType(clazz)) {
 			return Optional.of(new AvroTypeDescription(clazz));
 		} else {

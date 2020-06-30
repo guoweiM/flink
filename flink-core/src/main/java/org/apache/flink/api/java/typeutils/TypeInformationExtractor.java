@@ -36,16 +36,15 @@ import java.util.Optional;
 @Internal
 public interface TypeInformationExtractor {
 
-	interface ResolveContext {
-
-		List<Class<?>> getExtractingClasses();
-
-		Map<TypeVariable<?>, TypeInformation<?>> getTypeVariableBindings();
-
-		Type resolve(final Type type);
-	}
-
-	Optional<Type> resolve(final Type type, final ResolveContext context);
+	/**
+	 * Resolve the {@link TypeDescription} for the given type.
+	 * @param type the type that is needed to compute {@link TypeDescription}.
+	 * @param context used to resolve the {@link TypeDescription} for the generic parameters or components and contains
+	 *                some information of resolving process.
+	 * @return {@link TypeInformation} of the given type or {@link Optional#empty()} if could not handle this type
+	 * @throws InvalidTypesException if error occurs during the resolving
+	 */
+	Optional<TypeDescription> resolve(final Type type, final Context context);
 
 	/**
 	 * @return the classes that the extractor could extract the{@link TypeInformationExtractor} corresponding to.
@@ -53,26 +52,10 @@ public interface TypeInformationExtractor {
 	List<Class<?>> getClasses();
 
 	/**
-	 * Extract the {@link TypeInformation} of given type.
-	 * @param type the type that is needed to extract {@link TypeInformation}
-	 * @param context used to extract the {@link TypeInformation} for the generic parameters or components and contains some
-	 *                information of extracting process.
-	 * @return {@link TypeInformation} of the given type or {@link Optional#empty()} if the extractor could not handle this type
-	 * @throws InvalidTypesException if error occurs during extracting the {@link TypeInformation}
-	 */
-	Optional<TypeInformation<?>> extract(final Type type, final Context context);
-
-	/**
-	 * The extractor can use the interface to extract {@link TypeInformation} for the given type and get the information
+	 * The extractor can use the interface to extract {@link TypeDescription} for the given type and get the information
 	 * of extracting process.
 	 */
 	interface Context {
-		/**
-		 * @param type the type that is needed to extract {@link TypeInformation}
-		 * @return {@link TypeInformation} of the given type
-		 * @throws InvalidTypesException if error occurs during extracting the {@link TypeInformation} or can not handle the type.
-		 */
-		TypeInformation<?> extract(final Type type);
 
 		/**
 		 * @return the mapping relation between {@link TypeVariable} and {@link TypeInformation}. The extractor can try to
@@ -85,5 +68,12 @@ public interface TypeInformationExtractor {
 		 * whether there is a recursive type extracting process.
 		 */
 		List<Class<?>> getExtractingClasses();
+
+		/**
+		 * @param type the type that is needed to resolve {@link TypeDescription}.
+		 * @return {@link TypeDescription} of the given type.
+		 * @throws InvalidTypesException if error occurs during resolving the {@link TypeDescription}.
+		 */
+		TypeDescription resolve(final Type type);
 	}
 }

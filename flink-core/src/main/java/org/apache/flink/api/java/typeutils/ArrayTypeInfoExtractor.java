@@ -28,14 +28,21 @@ import java.lang.reflect.Type;
 import java.util.Optional;
 
 /**
- * This class is used to extract {@link TypeInformation} for the array type. There are two category array types:
- * {@link GenericArrayType} and {@link Class#isArray()}.
+ * This class is used to resolve the {@link TypeDescription} for the array type.
  */
 class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtractor {
 
 	public static final ArrayTypeInfoExtractor INSTANCE = new ArrayTypeInfoExtractor();
 
-	public Optional<Type> resolve(final Type type, final ResolveContext context) {
+	/**
+	 * Compute the {@link TypeDescription} for the array type. There are two category array types: {@link GenericArrayType} and
+	 * {@link Class#isArray()}.
+	 * @param type the type needed to compute the {@link TypeDescription}.
+	 * @param context used to resolve the {@link TypeDescription} for the generic parameters or components.
+	 * @return the {@link TypeDescription} of the given type or {@link Optional#empty()} if the type is not an array type.
+	 */
+	@Override
+	public Optional<TypeDescription> resolve(final Type type, final Context context) {
 		if (type instanceof Class && ((Class<?>) type).isArray()) {
 			return resolveArrayClass((Class<?>) type, context);
 		} else if (type instanceof GenericArrayType) {
@@ -44,85 +51,61 @@ class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtracto
 		return Optional.empty();
 	}
 
-	abstract static class ArrayClassDescription extends TypeDescriptionResolver.TypeDescription {
+	static class PrimitiveArrayTypeDescription implements TypeDescription {
+
 		private final Class<?> arrayClass;
 
-		public ArrayClassDescription(final Class<?> arrayClass) {
+		public PrimitiveArrayTypeDescription(Class<?> arrayClass) {
 			this.arrayClass = arrayClass;
 		}
 
-		public Class<?> getArrayClass() {
-			return arrayClass;
-		}
-
-		public Type getType() {
-			return arrayClass;
-		}
-	}
-
-	static class PrimitiveArrayTypeDescription extends ArrayClassDescription {
-
-		public PrimitiveArrayTypeDescription(Class<?> arrayClass) {
-			super(arrayClass);
-		}
-
 		@Override
-		TypeInformation<?> create() {
-			return PrimitiveArrayTypeInfo.getInfoFor(getArrayClass());
+		public TypeInformation<?> create() {
+			return PrimitiveArrayTypeInfo.getInfoFor(arrayClass);
 		}
 	}
 
-	static class BasicArrayTypeDescription extends ArrayClassDescription {
+	static class BasicArrayTypeDescription implements TypeDescription {
+
+		private final Class<?> arrayClass;
 
 		public BasicArrayTypeDescription(Class<?> arrayClass) {
-			super(arrayClass);
+			this.arrayClass = arrayClass;
 		}
 
 		@Override
-		TypeInformation<?> create() {
-			return BasicArrayTypeInfo.getInfoFor(getArrayClass());
+		public TypeInformation<?> create() {
+			return BasicArrayTypeInfo.getInfoFor(arrayClass);
 		}
 	}
 
-	static class ObjectArrayTypeDescription extends TypeDescriptionResolver.TypeDescription {
+	static class ObjectArrayTypeDescription implements TypeDescription {
 
-		private final Type componentType;
+		private final TypeDescription componentTypeDescription;
 
-		private final Type type;
-
-		public ObjectArrayTypeDescription(final Type type, final Type componentType) {
-			this.type = type;
-			this.componentType = componentType;
-		}
-
-		public Type getComponentType() {
-			return componentType;
+		public ObjectArrayTypeDescription(final TypeDescription componentTypeDescription) {
+			this.componentTypeDescription = componentTypeDescription;
 		}
 
 		@Override
-		Type getType() {
-			return type;
-		}
-
-		@Override
-		TypeInformation<?> create() {
-			final TypeInformation<?> componentTypeInformation = ((TypeDescriptionResolver.TypeDescription) componentType).create();
+		public TypeInformation<?> create() {
+			final TypeInformation<?> componentTypeInformation = componentTypeDescription.create();
 			return ObjectArrayTypeInfo.getInfoFor(Array.newInstance(componentTypeInformation.getTypeClass(), 0).getClass(), componentTypeInformation);
 		}
 	}
 
-	private Optional<Type> resolveArrayClass(final Class<?> clazz, final ResolveContext context) {
+	private Optional<TypeDescription> resolveArrayClass(final Class<?> clazz, final Context context) {
 		if (PrimitiveArrayTypeInfo.getClasses().contains(clazz)) {
 			return Optional.of(new PrimitiveArrayTypeDescription(clazz));
 		}
 		if (BasicArrayTypeInfo.getClasses().contains(clazz)) {
 			return Optional.of(new BasicArrayTypeDescription(clazz));
 		}
-		final Type componentTypeDescription = context.resolve(((Class<?>) clazz).getComponentType());
-		return Optional.of(new ObjectArrayTypeDescription(clazz, componentTypeDescription));
+		final TypeDescription componentTypeDescription = context.resolve(((Class<?>) clazz).getComponentType());
+		return Optional.of(new ObjectArrayTypeDescription(componentTypeDescription));
 	}
 
-	private Optional<Type> resolveGenericArray(final GenericArrayType genericArray, final ResolveContext context) {
+	private Optional<TypeDescription> resolveGenericArray(final GenericArrayType genericArray, final Context context) {
 
 		final Type componentType = genericArray.getGenericComponentType();
 		if (componentType instanceof Class) {
@@ -131,26 +114,8 @@ class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtracto
 			arrayClass = (java.lang.reflect.Array.newInstance(componentClass, 0).getClass());
 			return resolveArrayClass(arrayClass, context);
 		} else {
-			final Type componentTypeDescription = context.resolve(genericArray.getGenericComponentType());
-			return Optional.of(new ObjectArrayTypeDescription(genericArray, componentTypeDescription));
+			final TypeDescription componentTypeDescription = context.resolve(genericArray.getGenericComponentType());
+			return Optional.of(new ObjectArrayTypeDescription(componentTypeDescription));
 		}
-	}
-
-	/**
-	 * Extract {@link TypeInformation} for the array type.
-	 * @param type the type needed to extract {@link TypeInformation}
-	 * @param context used to extract the {@link TypeInformation} for the generic parameters or components.
-	 * @return the {@link TypeInformation} of the given type or {@link Optional#empty()} if the type is not an array type.
-	 */
-	public Optional<TypeInformation<?>> extract(final Type type, final TypeInformationExtractor.Context context) {
-
-		if (type instanceof PrimitiveArrayTypeDescription) {
-			return Optional.of(((PrimitiveArrayTypeDescription) type).create());
-		} else if (type instanceof BasicArrayTypeDescription) {
-			return Optional.of(((BasicArrayTypeDescription) type).create());
-		} else if (type instanceof ObjectArrayTypeDescription) {
-			return Optional.of(((ObjectArrayTypeDescription) type).create());
-		}
-		return Optional.empty();
 	}
 }

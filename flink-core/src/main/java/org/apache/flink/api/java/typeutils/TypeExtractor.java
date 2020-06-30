@@ -39,6 +39,7 @@ import org.apache.flink.api.common.typeinfo.TypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.typeutils.TypeExtractionUtils.LambdaExecutable;
+import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableMap;
 import org.apache.flink.util.Preconditions;
 
 import java.lang.reflect.Constructor;
@@ -791,12 +792,12 @@ public class TypeExtractor {
 			//TODO:: maybe we need a refactory. check it..
 			// SEE {@link Pojo}
 			() -> {
-				final Optional<Type> t =
+				final Optional<TypeDescription> t =
 					TypeInfoFactoryExtractor.INSTANCE.resolve(value.getClass(),
-						new TypeDescriptionResolver.TypeDescriptionResolveContext(Collections.singletonList(value.getClass()), Collections.emptyMap()));
+						new TypeDescriptionContext(Collections.singletonList(value.getClass()), Collections.emptyMap()));
 				if (t.isPresent()) {
+					return Optional.of(t.get().create());
 					//TODO:: maybe we need a not empty current extracting class?? see
-					return TypeInfoFactoryExtractor.INSTANCE.extract(t.get(), TypeInfoExtractContext.CONTEXT);
 				}
 				return Optional.empty();
 			},
@@ -933,9 +934,11 @@ public class TypeExtractor {
 
 	private static TypeInformation<?> extract(final Type type, final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings) {
 		final List<Class<?>> currentExtractingClasses = isClassType(type) ? Collections.singletonList(typeToClass(type)) : Collections.emptyList();
-		final Type returnTypeDescription = TypeDescriptionResolver.resolve(type, typeVariableBindings);
-
-		return TypeExtractionUtils.extract(returnTypeDescription, new TypeInfoExtractContext(typeVariableBindings, currentExtractingClasses));
+		final TypeDescription returnTypeDescription =
+			TypeExtractionUtils.resolve(type, new TypeDescriptionContext(
+				currentExtractingClasses,
+				ImmutableMap.<TypeVariable<?>, TypeInformation<?>>builder().putAll(typeVariableBindings).build()));
+		return returnTypeDescription.create();
 	}
 
 	/**

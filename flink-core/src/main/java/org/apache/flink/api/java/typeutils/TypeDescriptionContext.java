@@ -21,52 +21,46 @@ package org.apache.flink.api.java.typeutils;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.guava18.com.google.common.collect.ImmutableMap;
 
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.isClassType;
 import static org.apache.flink.api.java.typeutils.TypeExtractionUtils.typeToClass;
 
-class TypeInfoExtractContext implements TypeInformationExtractor.Context {
-
-	public static final TypeInfoExtractContext CONTEXT = new TypeInfoExtractContext(Collections.emptyMap(), Collections.emptyList());
-
-	private final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings;
+class TypeDescriptionContext implements TypeInformationExtractor.Context {
 
 	private final List<Class<?>> extractingClasses;
+	private final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings;
 
-	TypeInfoExtractContext(final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings, final List<Class<?>> extractingClasses) {
-		this.typeVariableBindings = ImmutableMap.<TypeVariable<?>, TypeInformation<?>>builder().putAll(typeVariableBindings).build();
-		this.extractingClasses = ImmutableList.<Class<?>>builder().addAll(extractingClasses).build();
-	}
-
-	@Override
-	public TypeInformation<?> extract(final Type type) {
-		final List<Class<?>> currentExtractingClasses;
-
-		if (isClassType(type)) {
-			currentExtractingClasses = new ArrayList<>(extractingClasses);
-			currentExtractingClasses.add(typeToClass(type));
-		} else {
-			currentExtractingClasses = extractingClasses;
-		}
-		final TypeInfoExtractContext context = new TypeInfoExtractContext(typeVariableBindings, currentExtractingClasses);
-		return TypeExtractionUtils.extract(type, context);
-	}
-
-	@Override
-	public Map<TypeVariable<?>, TypeInformation<?>> getTypeVariableBindings() {
-		return typeVariableBindings;
+	public TypeDescriptionContext(final List<Class<?>> extractingClasses, final Map<TypeVariable<?>, TypeInformation<?>> typeVariableBindings) {
+		this.extractingClasses = extractingClasses;
+		this.typeVariableBindings = typeVariableBindings;
 	}
 
 	@Override
 	public List<Class<?>> getExtractingClasses() {
 		return extractingClasses;
+	}
+
+	@Override
+	public Map<TypeVariable<?>, TypeInformation<?>> getTypeVariableBindings() {
+		return this.typeVariableBindings;
+	}
+
+	@Override
+	public TypeDescription resolve(final Type type) {
+		final List<Class<?>> currentExtractingClasses;
+		if (isClassType(type)) {
+			currentExtractingClasses =
+				ImmutableList.<Class<?>>builder().addAll(extractingClasses).add(typeToClass(type)).build();
+		} else {
+			currentExtractingClasses = extractingClasses;
+		}
+		return TypeExtractionUtils.resolve(
+			type,
+			new TypeDescriptionContext(currentExtractingClasses, typeVariableBindings));
 	}
 }
