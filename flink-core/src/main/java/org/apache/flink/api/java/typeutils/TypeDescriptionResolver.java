@@ -38,6 +38,8 @@ public class TypeDescriptionResolver {
 	public abstract static class TypeDescription implements Type {
 		//TODO:: remove it if we add the "createTypeInformation" method
 		abstract Type getType();
+
+		abstract TypeInformation<?> create();
 	}
 
 	public static class TypeDescriptionResolveContext implements TypeInformationExtractor.ResolveContext {

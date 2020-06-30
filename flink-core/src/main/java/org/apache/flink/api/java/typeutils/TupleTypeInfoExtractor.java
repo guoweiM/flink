@@ -118,6 +118,18 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 			this.types = typeDescriptions;
 		}
 
+		public TypeInformation<?> create() {
+			final int typeArgumentsLength = types.length;
+			// create the type information for the subtypes
+			final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
+
+			for (int i = 0; i < typeArgumentsLength; i++) {
+				subTypesInfo[i] = ((TypeDescription) types[i]).create();
+			}
+			// return tuple info
+			return new TupleTypeInfo(clazz, subTypesInfo);
+		}
+
 		public Type[] getTypes() {
 			return types;
 		}
@@ -147,16 +159,7 @@ public class TupleTypeInfoExtractor implements TypeInformationExtractor {
 		if (type instanceof Tuple0Description) {
 			return Optional.of(((Tuple0Description) type).create());
 		} else if (type instanceof TupleDescription) {
-			final TupleDescription tupleDescription = (TupleDescription) type;
-			final int typeArgumentsLength = tupleDescription.getTypes().length;
-			// create the type information for the subtypes
-			final TypeInformation<?>[] subTypesInfo = new TypeInformation<?>[typeArgumentsLength];
-
-			for (int i = 0; i < typeArgumentsLength; i++) {
-				subTypesInfo[i] = context.extract(tupleDescription.getTypes()[i]);
-			}
-			// return tuple info
-			return Optional.of(new TupleTypeInfo(tupleDescription.getClazz(), subTypesInfo));
+			return Optional.of(((TupleDescription) type).create());
 		}
 		return Optional.empty();
 	}

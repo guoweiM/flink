@@ -85,20 +85,32 @@ public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformatio
 			this.genericParams = genericParams;
 		}
 
-		public Map<String, Type> getGenericParams() {
-			return genericParams;
-		}
-
-		public TypeInfoFactory<?> getTypeInfoFactory() {
-			return typeInfoFactory;
-		}
-
 		public Class<?> getClazz() {
 			return clazz;
 		}
 
 		public Type getType() {
 			return clazz;
+		}
+
+		@Override
+		TypeInformation<?> create() {
+
+			final Map<String, TypeInformation<?>> typeInformationOfGenericParams;
+
+			if (!genericParams.isEmpty()) {
+				typeInformationOfGenericParams = new HashMap<>();
+				for (String name : genericParams.keySet()) {
+					typeInformationOfGenericParams.put(name, ((TypeDescriptionResolver.TypeDescription) genericParams.get(name)).create());
+				}
+			} else {
+				typeInformationOfGenericParams = Collections.emptyMap();
+			}
+			final TypeInformation<?> createdTypeInfo = typeInfoFactory.createTypeInfo(clazz, typeInformationOfGenericParams);
+			if (createdTypeInfo == null) {
+				throw new InvalidTypesException("TypeInfoFactory returned invalid TypeInformation 'null'");
+			}
+			return createdTypeInfo;
 		}
 	}
 
@@ -112,27 +124,7 @@ public class TypeInfoFactoryExtractor extends AutoRegisterDisabledTypeInformatio
 	public Optional<TypeInformation<?>> extract(final Type type, final TypeInformationExtractor.Context context) {
 
 		if (type instanceof TypeInfoFactoryDescriptor) {
-
-			final TypeInfoFactoryDescriptor typeInfoFactoryDescriptor = (TypeInfoFactoryDescriptor) type;
-
-			final Map<String, Type> genericParams = typeInfoFactoryDescriptor.getGenericParams();
-			final TypeInfoFactory<?> typeInfoFactory = typeInfoFactoryDescriptor.getTypeInfoFactory();
-
-			final Map<String, TypeInformation<?>> typeInformationOfGenericParams;
-
-			if (!genericParams.isEmpty()) {
-				typeInformationOfGenericParams = new HashMap<>();
-				for (String name : genericParams.keySet()) {
-					typeInformationOfGenericParams.put(name, context.extract(genericParams.get(name)));
-				}
-			} else {
-				typeInformationOfGenericParams = Collections.emptyMap();
-			}
-			final TypeInformation<?> createdTypeInfo = typeInfoFactory.createTypeInfo(typeInfoFactoryDescriptor.getClazz(), typeInformationOfGenericParams);
-			if (createdTypeInfo == null) {
-				throw new InvalidTypesException("TypeInfoFactory returned invalid TypeInformation 'null'");
-			}
-			return Optional.of(createdTypeInfo);
+			return Optional.of(((TypeInfoFactoryDescriptor) type).create());
 		}
 		return Optional.empty();
 	}

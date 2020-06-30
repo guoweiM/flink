@@ -65,12 +65,22 @@ class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtracto
 		public PrimitiveArrayTypeDescription(Class<?> arrayClass) {
 			super(arrayClass);
 		}
+
+		@Override
+		TypeInformation<?> create() {
+			return PrimitiveArrayTypeInfo.getInfoFor(getArrayClass());
+		}
 	}
 
-	static class BasicArrayTypeDescription extends  ArrayClassDescription {
+	static class BasicArrayTypeDescription extends ArrayClassDescription {
 
 		public BasicArrayTypeDescription(Class<?> arrayClass) {
 			super(arrayClass);
+		}
+
+		@Override
+		TypeInformation<?> create() {
+			return BasicArrayTypeInfo.getInfoFor(getArrayClass());
 		}
 	}
 
@@ -92,6 +102,12 @@ class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtracto
 		@Override
 		Type getType() {
 			return type;
+		}
+
+		@Override
+		TypeInformation<?> create() {
+			final TypeInformation<?> componentTypeInformation = ((TypeDescriptionResolver.TypeDescription) componentType).create();
+			return ObjectArrayTypeInfo.getInfoFor(Array.newInstance(componentTypeInformation.getTypeClass(), 0).getClass(), componentTypeInformation);
 		}
 	}
 
@@ -129,15 +145,11 @@ class ArrayTypeInfoExtractor extends AutoRegisterDisabledTypeInformationExtracto
 	public Optional<TypeInformation<?>> extract(final Type type, final TypeInformationExtractor.Context context) {
 
 		if (type instanceof PrimitiveArrayTypeDescription) {
-			final Class<?> clazz = ((PrimitiveArrayTypeDescription) type).getArrayClass();
-			return Optional.of(PrimitiveArrayTypeInfo.getInfoFor(clazz));
+			return Optional.of(((PrimitiveArrayTypeDescription) type).create());
 		} else if (type instanceof BasicArrayTypeDescription) {
-			final Class<?> clazz = ((BasicArrayTypeDescription) type).getArrayClass();
-			return Optional.of(BasicArrayTypeInfo.getInfoFor(clazz));
+			return Optional.of(((BasicArrayTypeDescription) type).create());
 		} else if (type instanceof ObjectArrayTypeDescription) {
-			final TypeInformation<?> componentTypeInformation =
-				context.extract(((ObjectArrayTypeDescription) type).getComponentType());
-			return Optional.of(ObjectArrayTypeInfo.getInfoFor(Array.newInstance(componentTypeInformation.getTypeClass(), 0).getClass(), componentTypeInformation));
+			return Optional.of(((ObjectArrayTypeDescription) type).create());
 		}
 		return Optional.empty();
 	}
