@@ -41,21 +41,10 @@ class TypeHierarchyBuilder {
 	 * @return the parameterized type hierarchy.
 	 */
 	static List<ParameterizedType> buildParameterizedTypeHierarchy(final Type type, final Class<?> baseClass) {
-		if (isClassType(type)) {
-			final List<ParameterizedType> typeHierarchy = new ArrayList<>();
-			if (type instanceof ParameterizedType) {
-				typeHierarchy.add((ParameterizedType) type);
-			}
-			typeHierarchy.addAll(
-				buildParameterizedTypeHierarchy(
-					typeToClass(type),
-					isSameClass(baseClass).or(assignTo(baseClass).negate()), assignTo(baseClass),
-					false)
-			);
-			return typeHierarchy.size() == 0 ? Collections.emptyList() : typeHierarchy;
-		}
-
-		return Collections.emptyList();
+		return buildParameterizedTypeHierarchy(
+			type,
+			isSameClass(baseClass).or(assignTo(baseClass).negate()), assignTo(baseClass),
+			false);
 	}
 
 	/**
@@ -71,25 +60,7 @@ class TypeHierarchyBuilder {
 		final Predicate<Class<?>> stopCondition,
 		final Predicate<Class<?>> matcher) {
 
-		if (isClassType(type)) {
-			final List<ParameterizedType> typeHierarchy = new ArrayList<>();
-			if (matcher.test(typeToClass(type))) {
-				if (type instanceof ParameterizedType) {
-					typeHierarchy.add((ParameterizedType) type);
-				}
-				if (stopCondition.test(typeToClass(type))) {
-					return typeHierarchy;
-				} else {
-					typeHierarchy.addAll(
-						buildParameterizedTypeHierarchy(typeToClass(type), stopCondition, matcher, false));
-					return typeHierarchy.size() == 0 ? Collections.emptyList() : typeHierarchy;
-				}
-			} else {
-				return Collections.emptyList();
-			}
-		}
-
-		return Collections.emptyList();
+		return buildParameterizedTypeHierarchy(type, stopCondition, matcher, false);
 	}
 
 	/**
@@ -108,47 +79,50 @@ class TypeHierarchyBuilder {
 
 	/**
 	 * Build the parameterized type hierarchy during traverse the {@code clazz}'s type hierarchy.
-	 * @param clazz the begin class of the type hierarchy
+	 * @param t the begin class of the type hierarchy
 	 * @param stopCondition stop traversing the hierarchy when the condition is satisfied
 	 * @param matcher add the parameterized type to the result if the type satisfied the matcher.
 	 * @return the parameterized type hierarchy.
 	 */
 	private static List<ParameterizedType> buildParameterizedTypeHierarchy(
-		final Class<?> clazz,
+		final Type t,
 		final Predicate<Class<?>> stopCondition,
 		final Predicate<Class<?>> matcher,
 		final boolean traverseInterface) {
 
 		final List<ParameterizedType> typeHierarchy = new ArrayList<>();
 
-		if (traverseInterface) {
-			final Type[] interfaceTypes = clazz.getGenericInterfaces();
+		if (isClassType(t)) {
+			final Class<?> clazz = typeToClass(t);
 
-			for (Type type : interfaceTypes) {
-				if (matcher.test(typeToClass(type))) {
-					if (type instanceof ParameterizedType) {
-						typeHierarchy.add((ParameterizedType) type);
-					}
-					if (!stopCondition.test(typeToClass(type))) {
-						final List<ParameterizedType> subTypeHierarchy =
-							buildParameterizedTypeHierarchy(typeToClass(type), stopCondition, matcher, true);
-						typeHierarchy.addAll(subTypeHierarchy);
-					}
+			if (matcher.test(clazz)) {
+				if (t instanceof ParameterizedType) {
+					typeHierarchy.add((ParameterizedType) t);
+				}
+				if (stopCondition.test(clazz)) {
 					return typeHierarchy;
 				}
 			}
-		}
 
-		final Type type = clazz.getGenericSuperclass();
-		if (type != null && matcher.test(typeToClass(type))) {
-			if (type instanceof ParameterizedType) {
-				typeHierarchy.add((ParameterizedType) type);
+			if (traverseInterface) {
+				final Type[] interfaceTypes = clazz.getGenericInterfaces();
+
+				for (Type type : interfaceTypes) {
+					final List<ParameterizedType> subTypeHierarchy =
+						buildParameterizedTypeHierarchy(type, stopCondition, matcher, true);
+					//TODO:: be compatible with the old behaviour
+					if (!subTypeHierarchy.isEmpty()) {
+						typeHierarchy.addAll(subTypeHierarchy);
+						return typeHierarchy;
+					}
+				}
 			}
-			if (!stopCondition.test(typeToClass(type))) {
-				final List<ParameterizedType> subTypeHierarchy =
-					buildParameterizedTypeHierarchy(typeToClass(type), stopCondition, matcher, traverseInterface);
-				typeHierarchy.addAll(subTypeHierarchy);
-			}
+
+			final Type type = clazz.getGenericSuperclass();
+			final List<ParameterizedType> subTypeHierarchy = buildParameterizedTypeHierarchy(type, stopCondition, matcher, traverseInterface);
+
+			typeHierarchy.addAll(subTypeHierarchy);
+
 			return typeHierarchy;
 		}
 
