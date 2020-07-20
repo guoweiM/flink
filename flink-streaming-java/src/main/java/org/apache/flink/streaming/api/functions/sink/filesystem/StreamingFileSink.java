@@ -23,6 +23,9 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.serialization.BulkWriter;
 import org.apache.flink.api.common.serialization.Encoder;
+import org.apache.flink.api.common.state.OperatorStateStore;
+import org.apache.flink.api.connector.sink.Sink;
+import org.apache.flink.api.connector.sink.SinkWriter;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.state.CheckpointListener;
@@ -36,10 +39,12 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.util.Preconditions;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * Sink that emits its input elements to {@link FileSystem} files within buckets. This is
@@ -104,16 +109,27 @@ public class StreamingFileSink<IN>
 
 	private transient StreamingFileSinkHelper<IN> helper;
 
+	// ------------------------ new sink api ----------------------------------
+
+	private final Sink sink;
+
+	private transient SinkWriter<IN, FileSinkSplit> sinkWriter;
+
+	private transient SinkSplitManagerOperatorWrapper<FileSinkSplit> sinkSplitManager;
+
+
 	/**
 	 * Creates a new {@code StreamingFileSink} that writes files to the given base directory
 	 * with the give buckets properties.
 	 */
 	protected StreamingFileSink(
+		Sink sink,
 		BucketsBuilder<IN, ?, ? extends BucketsBuilder<IN, ?, ?>> bucketsBuilder,
 		long bucketCheckInterval) {
 
 		Preconditions.checkArgument(bucketCheckInterval > 0L);
 
+		this.sink = sink;
 		this.bucketsBuilder = Preconditions.checkNotNull(bucketsBuilder);
 		this.bucketCheckInterval = bucketCheckInterval;
 	}
@@ -240,8 +256,14 @@ public class StreamingFileSink<IN>
 		}
 
 		/** Creates the actual sink. */
-		public StreamingFileSink<IN> build() {
-			return new StreamingFileSink<>(this, bucketCheckInterval);
+		public StreamingFileSink<IN> build() throws IOException {
+			return new StreamingFileSink<>(
+				new FileSink(
+					this,
+					new RowWiseBucketWriter(FileSystem.get(basePath.toUri()).createRecoverableWriter(), encoder),
+					bucketCheckInterval),
+				this,
+				bucketCheckInterval);
 		}
 
 		@VisibleForTesting
@@ -357,8 +379,14 @@ public class StreamingFileSink<IN>
 		}
 
 		/** Creates the actual sink. */
-		public StreamingFileSink<IN> build() {
-			return new StreamingFileSink<>(this, bucketCheckInterval);
+		public StreamingFileSink<IN> build() throws IOException {
+			return new StreamingFileSink<>(
+				new FileSink(
+					this,
+					new BulkBucketWriter(FileSystem.get(basePath.toUri()).createRecoverableWriter(), writerFactory),
+					bucketCheckInterval),
+				this,
+				bucketCheckInterval);
 		}
 
 		@Internal
@@ -392,6 +420,36 @@ public class StreamingFileSink<IN>
 
 	@Override
 	public void initializeState(FunctionInitializationContext context) throws Exception {
+
+		this.sinkWriter = this.sink.createWriter(new FileSink.FileSinkInitialContext() {
+			@Override
+			public ProcessingTimeService getProcessingTimeService() {
+				return 	((StreamingRuntimeContext) getRuntimeContext()).getProcessingTimeService();
+			}
+
+			@Override
+			public OperatorStateStore getOperatorStateStore() {
+				return context.getOperatorStateStore();
+			}
+
+			@Override
+			public boolean isRestored() {
+				return context.isRestored();
+			}
+
+			@Override
+			public int getSubTaskIndex() {
+				return getRuntimeContext().getIndexOfThisSubtask();
+			}
+		});
+
+		this.sinkSplitManager =
+			new SinkSplitManagerOperatorWrapper<FileSinkSplit>(
+				context.isRestored(),
+				context.getOperatorStateStore(),
+				this.sink.createSplitCommitter(),
+				this.sink.getSplitSerializer());
+
 		this.helper = new StreamingFileSinkHelper<>(
 				bucketsBuilder.createBuckets(getRuntimeContext().getIndexOfThisSubtask()),
 				context.isRestored(),
@@ -403,6 +461,7 @@ public class StreamingFileSink<IN>
 	@Override
 	public void notifyCheckpointComplete(long checkpointId) throws Exception {
 		this.helper.commitUpToCheckpoint(checkpointId);
+		this.sinkSplitManager.checkpointComplete(checkpointId);
 	}
 
 	@Override
@@ -411,23 +470,42 @@ public class StreamingFileSink<IN>
 
 	@Override
 	public void snapshotState(FunctionSnapshotContext context) throws Exception {
-		Preconditions.checkState(helper != null, "sink has not been initialized");
-		this.helper.snapshotState(context.getCheckpointId());
+
+		Preconditions.checkState(sinkWriter != null, "sink has not been initialized");
+		final List<FileSinkSplit> splits = sinkWriter.preCommit();
+		sinkWriter.persist();
+		sinkSplitManager.add(getRuntimeContext().getIndexOfThisSubtask(), splits);
+		sinkSplitManager.persist(context.getCheckpointId());
 	}
 
 	@Override
 	public void invoke(IN value, SinkFunction.Context context) throws Exception {
-		this.helper.onElement(
-				value,
-				context.currentProcessingTime(),
-				context.timestamp(),
-				context.currentWatermark());
+		this.sinkWriter.write(value, new SinkWriter.Context() {
+			@Override
+			public long currentProcessingTime() {
+				return context.currentProcessingTime();
+			}
+
+			@Override
+			public long currentWatermark() {
+				return context.currentWatermark();
+			}
+
+			@Override
+			public Long timestamp() {
+				return context.timestamp();
+			}
+		});
 	}
 
 	@Override
 	public void close() throws Exception {
 		if (this.helper != null) {
 			this.helper.close();
+		}
+
+		if (this.sinkSplitManager != null) {
+			this.sinkSplitManager.close();
 		}
 	}
 }
