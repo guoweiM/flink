@@ -73,17 +73,34 @@ public class UnifiedSinkCoordinator<SplitT> implements OperatorCoordinator {
 
 	@Override
 	public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> resultFuture) throws Exception {
-
+		byte[] result = new byte[1000];
+		//we assume that the checkpoint is last one
+		for (List<SplitT> splitList : finalSplitsFromSubtask.values()) {
+			for (SplitT split : splitList) {
+				byte [] s = splitSimpleVersionedSerializer.serialize(split);
+				//TODO: copy s to result;
+			}
+		}
+		resultFuture.complete(result);
 	}
 
 	@Override
 	public void checkpointComplete(long checkpointId) {
-
+		// we assume that the checkpoint is the last one
+		for (List<SplitT> splitList : finalSplitsFromSubtask.values()) {
+			try {
+				splitCommitter.commit(splitList);
+			} catch (IOException e) {
+				e.printStackTrace();
+				//todo fail the job
+			}
+		}
 	}
 
 	@Override
 	public void resetToCheckpoint(byte[] checkpointData) throws Exception {
-
+		// 1. restore all the split
+		// 2. commit it
 	}
 
 	public static class LastSinkSplitsEvent<SplitT> implements OperatorEvent  {
