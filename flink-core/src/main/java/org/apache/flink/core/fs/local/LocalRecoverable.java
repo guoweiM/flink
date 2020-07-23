@@ -23,6 +23,7 @@ import org.apache.flink.core.fs.RecoverableWriter.CommitRecoverable;
 import org.apache.flink.core.fs.RecoverableWriter.ResumeRecoverable;
 
 import java.io.File;
+import java.io.Serializable;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -31,7 +32,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * An implementation of the resume and commit descriptor objects for local recoverable streams.
  */
 @Internal
-class LocalRecoverable implements CommitRecoverable, ResumeRecoverable {
+class LocalRecoverable implements CommitRecoverable, ResumeRecoverable, Serializable {
 
 	/** The file path for the final result file. */
 	private final File targetFile;

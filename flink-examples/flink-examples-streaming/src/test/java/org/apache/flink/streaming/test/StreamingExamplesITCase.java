@@ -28,6 +28,7 @@ import org.apache.flink.streaming.examples.iteration.util.IterateExampleData;
 import org.apache.flink.streaming.examples.ml.util.IncrementalLearningSkeletonData;
 import org.apache.flink.streaming.examples.twitter.util.TwitterExampleData;
 import org.apache.flink.streaming.examples.windowing.util.SessionWindowingData;
+import org.apache.flink.streaming.examples.wordcount.WordCount;
 import org.apache.flink.streaming.test.examples.join.WindowJoinData;
 import org.apache.flink.test.testdata.WordCountData;
 import org.apache.flink.test.util.AbstractTestBase;
@@ -144,7 +145,7 @@ public class StreamingExamplesITCase extends AbstractTestBase {
 		final String textPath = createTempFile("text.txt", WordCountData.TEXT);
 		final String resultPath = getTempDirPath("result");
 
-		org.apache.flink.streaming.examples.wordcount.WordCount.main(new String[]{
+		WordCount.main(new String[]{
 			"--input", textPath,
 			"--output", resultPath});
 

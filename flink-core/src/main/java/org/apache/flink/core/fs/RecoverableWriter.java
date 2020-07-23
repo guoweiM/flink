@@ -22,6 +22,7 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * The RecoverableWriter creates and recovers {@link RecoverableFsDataOutputStream}.

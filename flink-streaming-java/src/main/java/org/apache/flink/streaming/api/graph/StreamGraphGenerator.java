@@ -31,11 +31,7 @@ import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
-import org.apache.flink.streaming.api.operators.CommitOperator;
-import org.apache.flink.streaming.api.operators.InputFormatOperatorFactory;
-import org.apache.flink.streaming.api.operators.OutputFormatOperatorFactory;
-import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
-import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
+import org.apache.flink.streaming.api.operators.*;
 import org.apache.flink.streaming.api.transformations.AbstractMultipleInputTransformation;
 import org.apache.flink.streaming.api.transformations.CoFeedbackTransformation;
 import org.apache.flink.streaming.api.transformations.FeedbackTransformation;
@@ -456,17 +452,17 @@ public class StreamGraphGenerator {
 		// create an operator for executing this. Once we have bounded/unbounded execution
 		// we can decide on different physical execution strategies for this. Could be an operator,
 		// could be an operator with an operator coordinator that does some magic.
-		CommitOperator<CommitT> commitOperator = new CommitOperator<>(
-				transform.getCommitFunction(),
-				transform.getInput().getOutputType().createSerializer(executionConfig));
+//		CommitOperator<CommitT> commitOperator = new CommitOperator<>(
+//				transform.getCommitFunction(),
+//				transform.getInput().getOutputType().createSerializer(executionConfig));
 
-		SimpleOperatorFactory<Void> commitOperatorFactory = SimpleOperatorFactory.of(commitOperator);
+//		SimpleOperatorFactory<Void> commitOperatorFactory = SimpleOperatorFactory.of(commitOperator);
 
 		streamGraph.addOperator(
 				transform.getId(),
 				slotSharingGroup,
 				transform.getCoLocationGroupKey(),
-				commitOperatorFactory,
+				new CommitOperatorFactory<>(transform.getCommitFunction(),transform.getInput().getOutputType().createSerializer(executionConfig)),
 				transform.getInput().getOutputType(),
 				null,
 				transform.getName());

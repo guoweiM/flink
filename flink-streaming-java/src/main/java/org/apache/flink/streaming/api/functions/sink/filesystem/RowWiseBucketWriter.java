@@ -31,11 +31,11 @@ import org.apache.flink.util.Preconditions;
  * @param <BucketID> The type of ids for the buckets, as returned by the {@link BucketAssigner}.
  */
 @Internal
-class RowWiseBucketWriter<IN, BucketID> extends OutputStreamBasedPartFileWriter.OutputStreamBasedBucketWriter<IN, BucketID> {
+public class RowWiseBucketWriter<IN, BucketID> extends OutputStreamBasedPartFileWriter.OutputStreamBasedBucketWriter<IN, BucketID> {
 
 	private final Encoder<IN> encoder;
 
-	RowWiseBucketWriter(final RecoverableWriter recoverableWriter, final Encoder<IN> encoder) {
+	public RowWiseBucketWriter(final RecoverableWriter recoverableWriter, final Encoder<IN> encoder) {
 		super(recoverableWriter);
 		this.encoder = encoder;
 	}
