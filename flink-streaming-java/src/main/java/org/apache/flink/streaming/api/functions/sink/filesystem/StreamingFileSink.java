@@ -239,6 +239,10 @@ public class StreamingFileSink<IN>
 			return new RowFormatBuilder(basePath, encoder, Preconditions.checkNotNull(assigner), Preconditions.checkNotNull(policy), bucketCheckInterval, new DefaultBucketFactoryImpl<>(), outputFileConfig);
 		}
 
+		public FileSink<IN, BucketID> buildFileSink() throws IOException {
+			return new FileSink(this, bucketCheckInterval, basePath, encoder);
+		}
+
 		/** Creates the actual sink. */
 		public StreamingFileSink<IN> build() {
 			return new StreamingFileSink<>(this, bucketCheckInterval);

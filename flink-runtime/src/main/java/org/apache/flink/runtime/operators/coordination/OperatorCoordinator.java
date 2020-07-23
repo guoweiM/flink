@@ -23,6 +23,7 @@ import org.apache.flink.runtime.messages.Acknowledge;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
 

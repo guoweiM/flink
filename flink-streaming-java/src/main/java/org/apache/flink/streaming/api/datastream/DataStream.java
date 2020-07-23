@@ -40,6 +40,7 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.java.Utils;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -69,8 +70,10 @@ import org.apache.flink.streaming.api.operators.StreamFlatMap;
 import org.apache.flink.streaming.api.operators.StreamMap;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamSink;
+import org.apache.flink.streaming.api.operators.UnifiedSinkOperatorFactory;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
+import org.apache.flink.streaming.api.transformations.UnifiedSinkTransformation;
 import org.apache.flink.streaming.api.transformations.UnionTransformation;
 import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
@@ -1299,6 +1302,12 @@ public class DataStream<T> {
 
 		getExecutionEnvironment().addOperator(sink.getTransformation());
 		return sink;
+	}
+
+	public <CheckpointT> void addSink(Sink<T, CheckpointT> sink) {
+		transformation.getOutputType();
+		getExecutionEnvironment().
+			addOperator(new UnifiedSinkTransformation<>(transformation, "unified-sink", 2, new UnifiedSinkOperatorFactory<>(sink)));
 	}
 
 	/**

@@ -47,6 +47,7 @@ import org.apache.flink.streaming.api.transformations.SinkTransformation;
 import org.apache.flink.streaming.api.transformations.SourceTransformation;
 import org.apache.flink.streaming.api.transformations.SplitTransformation;
 import org.apache.flink.streaming.api.transformations.TwoInputTransformation;
+import org.apache.flink.streaming.api.transformations.UnifiedSinkTransformation;
 import org.apache.flink.streaming.api.transformations.UnionTransformation;
 import org.apache.flink.streaming.runtime.io.MultipleInputSelectionHandler;
 
@@ -261,6 +262,8 @@ public class StreamGraphGenerator {
 			transformedIds = transformLegacySource((LegacySourceTransformation<?>) transform);
 		} else if (transform instanceof SinkTransformation<?>) {
 			transformedIds = transformSink((SinkTransformation<?>) transform);
+		} else if (transform instanceof UnifiedSinkTransformation) {
+			transformedIds = transformUnifiedSink((UnifiedSinkTransformation<?>) transform);
 		} else if (transform instanceof UnionTransformation<?>) {
 			transformedIds = transformUnion((UnionTransformation<?>) transform);
 		} else if (transform instanceof SplitTransformation<?>) {
@@ -617,7 +620,33 @@ public class StreamGraphGenerator {
 		streamGraph.setMaxParallelism(source.getId(), source.getMaxParallelism());
 		return Collections.singleton(source.getId());
 	}
+	private <T> Collection<Integer> transformUnifiedSink(UnifiedSinkTransformation<T> sink) {
+		Collection<Integer> inputIds = transform(sink.getInput());
 
+		String slotSharingGroup = determineSlotSharingGroup(sink.getSlotSharingGroup(), inputIds);
+
+		streamGraph.addSink(sink.getId(),
+			slotSharingGroup,
+			sink.getCoLocationGroupKey(),
+			sink.getOperatorFactory(),
+			sink.getInput().getOutputType(),
+			null,
+			"Sink1111: " + sink.getName());
+
+		int parallelism = sink.getParallelism() != ExecutionConfig.PARALLELISM_DEFAULT ?
+			sink.getParallelism() : executionConfig.getParallelism();
+		streamGraph.setParallelism(sink.getId(), parallelism);
+		streamGraph.setMaxParallelism(sink.getId(), sink.getMaxParallelism());
+
+		for (Integer inputId: inputIds) {
+			streamGraph.addEdge(inputId,
+				sink.getId(),
+				0
+			);
+		}
+
+		return Collections.emptyList();
+	}
 	/**
 	 * Transforms a {@code SinkTransformation}.
 	 */

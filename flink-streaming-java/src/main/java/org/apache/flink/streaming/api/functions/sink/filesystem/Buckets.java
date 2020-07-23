@@ -32,8 +32,10 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -379,6 +381,59 @@ public class Buckets<IN, BucketID> {
 		@Nullable
 		public Long timestamp() {
 			return elementTimestamp;
+		}
+	}
+
+	// --------------------------- method for the new sink api -----------------
+
+	public List<FileSinkSplit> preCommit() throws IOException {
+		final Iterator<Map.Entry<BucketID, Bucket<IN, BucketID>>> activeBucketIt =
+			activeBuckets.entrySet().iterator();
+
+		final List<FileSinkSplit> fileSinkSplits = new ArrayList<>();
+
+		while (activeBucketIt.hasNext()) {
+			final Bucket<IN, BucketID> bucket = activeBucketIt.next().getValue();
+			final FileSinkSplit fileSinkSplit = bucket.preCommit();
+
+			fileSinkSplits.add(fileSinkSplit);
+			if (!bucket.isActive()) {
+				// We've dealt with all the pending files and the writer for this bucket is not currently open.
+				// Therefore this bucket is currently inactive and we can remove it from our state.
+				activeBucketIt.remove();
+				//TODO:: maybe need to set the state to the fileSinkSplit.
+				//notifyBucketInactive(bucket);
+			}
+		}
+		return fileSinkSplits;
+	}
+
+	public void persist(
+		final ListState<byte[]> bucketStatesContainer,
+		final ListState<Long> partCounterStateContainer) throws Exception {
+
+		Preconditions.checkState(
+			bucketWriter != null && bucketStateSerializer != null,
+			"sink has not been initialized");
+
+		bucketStatesContainer.clear();
+		partCounterStateContainer.clear();
+
+		partCounterStateContainer.add(maxPartCounter);
+
+		for (Bucket<IN, BucketID> bucket : activeBuckets.values()) {
+			final BucketState bucketState = bucket.persist();
+
+			final byte[] serializedBucketState = SimpleVersionedSerialization
+				.writeVersionAndSerialize(bucketStateSerializer, bucketState);
+
+			bucketStatesContainer.add(serializedBucketState);
+		}
+	}
+
+	public void flush() {
+		for (Bucket<IN, BucketID> bucket : activeBuckets.values()) {
+			bucket.flush();
 		}
 	}
 

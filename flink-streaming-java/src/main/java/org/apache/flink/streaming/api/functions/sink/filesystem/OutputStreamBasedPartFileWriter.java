@@ -30,6 +30,7 @@ import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.util.IOUtils;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * The base class for all the part file writer that use {@link org.apache.flink.core.fs.RecoverableFsDataOutputStream}.
@@ -135,7 +136,7 @@ public abstract class OutputStreamBasedPartFileWriter<IN, BucketID> extends Abst
 			final long creationTime) throws IOException;
 	}
 
-	static final class OutputStreamBasedPendingFileRecoverable implements PendingFileRecoverable {
+	static final class OutputStreamBasedPendingFileRecoverable implements PendingFileRecoverable, Serializable {
 
 		private final RecoverableWriter.CommitRecoverable commitRecoverable;
 
@@ -145,6 +146,13 @@ public abstract class OutputStreamBasedPartFileWriter<IN, BucketID> extends Abst
 
 		RecoverableWriter.CommitRecoverable getCommitRecoverable() {
 			return commitRecoverable;
+		}
+
+		@Override
+		public String toString() {
+			return "OutputStreamBasedPendingFileRecoverable{" +
+				"commitRecoverable=" + commitRecoverable +
+				'}';
 		}
 	}
 
