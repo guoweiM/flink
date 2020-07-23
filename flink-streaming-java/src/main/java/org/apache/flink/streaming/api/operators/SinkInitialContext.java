@@ -16,13 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.flink.api.connector.sink;
+package org.apache.flink.streaming.api.operators;
 
-import java.io.Serializable;
+import org.apache.flink.api.connector.sink.Sink;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 
-/**
- * TODO DOC
- * TODO Why do we need this interface? because the
- */
-public interface SinkSplit extends Serializable {
+public interface SinkInitialContext extends Sink.InitialContext {
+
+	ProcessingTimeService getProcessingTimeService();
+
 }

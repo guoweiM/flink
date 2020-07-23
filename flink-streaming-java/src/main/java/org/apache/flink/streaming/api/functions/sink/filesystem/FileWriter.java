@@ -24,6 +24,7 @@ import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.common.typeutils.base.array.BytePrimitiveArraySerializer;
 import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.SinkWriter;
+import org.apache.flink.streaming.api.operators.SinkInitialContext;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeCallback;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 
@@ -58,10 +59,10 @@ public class FileWriter<IN, BucketID> implements SinkWriter<IN, FileSinkSplit>, 
 		StreamingFileSink.BucketsBuilder<IN, BucketID, ? extends StreamingFileSink.BucketsBuilder<IN, BucketID, ?>> bucketsBuilder,
 		long bucketCheckInterval) throws Exception {
 
-		final FileSink.FileSinkInitialContext fileSinkInitialContext = (FileSink.FileSinkInitialContext) context;
+		final SinkInitialContext sinkInitialContext = (SinkInitialContext) context;
 
-		this.buckets = bucketsBuilder.createBuckets(context.getSubTaskIndex());
-		this.processingTimeService = fileSinkInitialContext.getProcessingTimeService();
+		this.buckets = bucketsBuilder.createBuckets(context.getSubtaskIndex());
+		this.processingTimeService = sinkInitialContext.getProcessingTimeService();
 		this.bucketCheckInterval = bucketCheckInterval;
 
 		this.bucketStatesContainer = context.getOperatorStateStore().getListState(BUCKET_STATE_DESC);

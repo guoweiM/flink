@@ -30,7 +30,7 @@ import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
  * @param <IN>
  * @param <BucketID>
  */
-public class FileSink<IN, BucketID> implements Sink<IN, FileSinkSplit, FileSinkSplit> {
+public class FileSink<IN, BucketID> implements Sink<IN, FileSinkSplit> {
 
 	private final StreamingFileSink.BucketsBuilder<IN, BucketID, ? extends StreamingFileSink.BucketsBuilder<IN, BucketID, ?>> bucketsBuilder;
 

@@ -29,7 +29,6 @@ import java.io.Serializable;
  */
 public interface Sink<T, SplitT> extends Serializable {
 
-	//TODO:: how to deal with the configuration
 	SinkWriter<T, SplitT> createWriter(InitialContext context) throws Exception;
 
 	SplitCommitter<SplitT> createSplitCommitter() throws Exception;
@@ -45,6 +44,6 @@ public interface Sink<T, SplitT> extends Serializable {
 
 		boolean isRestored();
 
-		int getSubTaskIndex();
+		int getSubtaskIndex();
 	}
 }
