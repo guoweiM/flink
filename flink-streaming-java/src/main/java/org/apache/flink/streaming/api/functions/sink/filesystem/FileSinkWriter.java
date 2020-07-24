@@ -59,7 +59,7 @@ public class FileSinkWriter<IN, BucketID> implements SplitWriter<IN, FileSinkSpl
 	}
 
 	@Override
-	public void write(IN element, Context context) throws Exception {
+	public void write(IN element, SinkWriter.Context context) throws Exception {
 		buckets.onElement(element, context.currentProcessingTime(), context.timestamp(), context.currentWatermark());
 	}
 

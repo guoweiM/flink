@@ -20,11 +20,29 @@ package org.apache.flink.api.connector.sink;
 
 public interface SinkWriter<T> {
 
-	void write(T t);
+	void write(T t, Context context);
 
 	void preCommit(long checkpointId) throws Exception;
 
 	void commitUpTo(long checkpointId);
 
 	void flush();
+
+	/**
+	 * TODO java doc.
+	 */
+	interface Context {
+
+		/** Returns the current processing time. */
+		long currentProcessingTime();
+
+		/** Returns the current event-time watermark. */
+		long currentWatermark();
+
+		/**
+		 * Returns the timestamp of the current input record or {@code null} if the element does not
+		 * have an assigned timestamp.
+		 */
+		Long timestamp();
+	}
 }

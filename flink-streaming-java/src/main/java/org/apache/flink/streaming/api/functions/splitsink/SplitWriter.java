@@ -19,15 +19,18 @@
 
 package org.apache.flink.streaming.api.functions.splitsink;
 
+import org.apache.flink.api.connector.sink.SinkWriter;
+
+import java.io.IOException;
 import java.util.List;
 
 public interface SplitWriter<IN, SplitT> {
 
-	void write(IN in);
+	void write(IN in, SinkWriter.Context context) throws Exception;
 
-	List<SplitT> preCommit();
+	List<SplitT> preCommit() throws IOException;
 
-	void persist();
+	void persist() throws Exception;
 
 	void flush();
 }

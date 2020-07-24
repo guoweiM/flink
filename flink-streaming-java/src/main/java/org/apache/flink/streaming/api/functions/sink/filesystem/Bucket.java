@@ -73,6 +73,17 @@ public class Bucket<IN, BucketID> {
 
 	private List<InProgressFileWriter.PendingFileRecoverable> pendingFileRecoverablesForCurrentCheckpoint;
 
+	//---------------------------- begin for the new sink api ----------------------------
+
+	// This field represents the data needed to be cleanup. This field is only updated at the writer persisting happens.
+	// It would be return to the SinkSplit.
+	@Nullable
+	private InProgressFileWriter.InProgressFileRecoverable lastInProgressFileRecoverable = null;
+
+	private boolean isTerminated = false;
+
+	//---------------------------- end for the new sink api ------------------------------
+
 	/**
 	 * Constructor to create a new empty bucket.
 	 */
@@ -313,6 +324,37 @@ public class Bucket<IN, BucketID> {
 			}
 			closePartFile();
 		}
+	}
+
+	// ---------------------------------- method for the new sink api -------------------------------------------
+
+	public FileSinkSplit preCommit() throws IOException {
+		if (inProgressPart != null && (rollingPolicy.shouldRollOnCheckpoint(inProgressPart) || isTerminated)) {
+			if (LOG.isDebugEnabled()) {
+				LOG.debug("Subtask {} closing in-progress part file for bucket id={} on checkpoint.", subtaskIndex, bucketId);
+			}
+			closePartFile();
+		}
+		final FileSinkSplit fileSinkSplit = new FileSinkSplit(pendingFileRecoverablesForCurrentCheckpoint, lastInProgressFileRecoverable);
+		pendingFileRecoverablesForCurrentCheckpoint = new ArrayList<>();
+		return fileSinkSplit;
+	}
+
+	public BucketState<BucketID> persist() throws IOException {
+
+		lastInProgressFileRecoverable = null;
+		long inProgressFileCreationTime = Long.MAX_VALUE;
+
+		if (inProgressPart != null) {
+			lastInProgressFileRecoverable = inProgressPart.persist();
+			inProgressFileCreationTime = inProgressPart.getCreationTime();
+		}
+
+		return new BucketState<>(bucketId, bucketPath, inProgressFileCreationTime, lastInProgressFileRecoverable, pendingFileRecoverablesPerCheckpoint);
+	}
+
+	public void flush() {
+		isTerminated = true;
 	}
 
 	// --------------------------- Testing Methods -----------------------------

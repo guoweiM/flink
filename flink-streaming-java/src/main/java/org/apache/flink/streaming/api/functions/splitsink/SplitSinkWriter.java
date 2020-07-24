@@ -74,7 +74,7 @@ public class SplitSinkWriter<IN, SplitT> implements SinkWriter<IN> {
 	}
 
 	@Override
-	public void write(IN in) {
+	public void write(IN in, Context context) {
 		splitWriter.write(in);
 	}
 

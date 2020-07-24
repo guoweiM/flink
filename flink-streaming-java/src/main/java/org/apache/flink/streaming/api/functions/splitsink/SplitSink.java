@@ -46,4 +46,14 @@ public abstract class SplitSink<T, SplitT> implements Sink<T, List<SplitT>> {
 	public SinkManager<List<SplitT>> createSinkManager() {
 		return new SplitSinkManager<>(createSplitCommitter());
 	}
+
+	@Override
+	public SinkManager<List<SplitT>> restoreSinkManager(List<SplitT> checkpoint) {
+		return null;
+	}
+
+	@Override
+	public SimpleVersionedSerializer<List<SplitT>> getSinkManagerCheckpointSerializer() {
+		return null;
+	}
 }
