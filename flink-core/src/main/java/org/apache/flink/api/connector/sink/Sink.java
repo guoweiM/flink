@@ -20,7 +20,9 @@ package org.apache.flink.api.connector.sink;
 
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
-public interface Sink<T, SinkManagerCheckpointT> {
+import java.io.Serializable;
+
+public interface Sink<T, SinkManagerCheckpointT> extends Serializable {
 
 	SinkWriter<T> createWriter(SinkWriterContext sinkWriterContext) throws Exception;
 

@@ -71,6 +71,7 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 
 	@Override
 	public void initializeState(StateInitializationContext context) throws Exception {
+		super.initializeState(context);
 		sinkEventsState = context.getOperatorStateStore().getListState(SINK_EVENTS_STATE_DES);
 		for (byte[] es : sinkEventsState.get()) {
 			final SinkEvent sinkEvent = SimpleVersionedSerialization.readVersionAndDeSerialize(sinkEventSimpleVersionedSerializer, es);
@@ -136,6 +137,11 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 		@Override
 		public OperatorStateStore getOperatorStateStore() {
 			return operatorStateStore;
+		}
+
+		@Override
+		public boolean isRestored() {
+			return false;
 		}
 
 		@Override

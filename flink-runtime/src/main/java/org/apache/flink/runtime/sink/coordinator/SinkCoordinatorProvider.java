@@ -27,7 +27,9 @@ import org.apache.flink.runtime.operators.coordination.RecreateOnResetOperatorCo
  * Java Doc.
  * @param <CheckpointT>
  */
-public class SinkCoordinatorProvider<CheckpointT> extends RecreateOnResetOperatorCoordinator.Provider{
+public class SinkCoordinatorProvider<CheckpointT> extends RecreateOnResetOperatorCoordinator.Provider {
+	private static final long serialVersionUID = -1020601342049738462L;
+
 
 	private final Sink<?, CheckpointT> sink;
 

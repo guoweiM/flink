@@ -18,23 +18,45 @@
 
 package org.apache.flink.streaming.api.operators;
 
+import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
+import org.apache.flink.runtime.sink.coordinator.SinkCoordinatorProvider;
 
-public class SinkOperatorFactory extends AbstractStreamOperatorFactory<Object>
+public class UnifiedSinkOperatorFactory<IN, CheckpointT> extends AbstractStreamOperatorFactory<Object>
 	implements CoordinatedOperatorFactory<Object>{
+
+	private final Sink<IN, CheckpointT> sink;
+
+	public UnifiedSinkOperatorFactory(Sink<IN, CheckpointT> sink) {
+		this.sink = sink;
+	}
+
 	@Override
 	public OperatorCoordinator.Provider getCoordinatorProvider(String operatorName, OperatorID operatorID) {
-		return null;
+		return new SinkCoordinatorProvider<>(operatorID, sink);
 	}
 
 	@Override
 	public <T extends StreamOperator<Object>> T createStreamOperator(StreamOperatorParameters<Object> parameters) {
-		return null;
+		final OperatorID operatorId = parameters.getStreamConfig().getOperatorID();
+
+		try {
+			UnifiedSinkOperator u = new UnifiedSinkOperator<>(
+				sink,
+				parameters.getOperatorEventDispatcher().getOperatorEventGateway(operatorId),
+				null);
+
+			u.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
+			return (T) u;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new RuntimeException("fail to create stream operator");
+		}
 	}
 
 	@Override
 	public Class<? extends StreamOperator> getStreamOperatorClass(ClassLoader classLoader) {
-		return null;
+		return UnifiedSinkOperator.class;
 	}
 }

@@ -18,13 +18,20 @@
 package org.apache.flink.streaming.examples.wordcount;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.connector.sink.SinkManager;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.MultipleParameterTool;
+import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.splitsink.SplitCommitter;
+import org.apache.flink.streaming.api.functions.splitsink.SplitSink;
+import org.apache.flink.streaming.api.functions.splitsink.SplitWriter;
 import org.apache.flink.streaming.examples.wordcount.util.WordCountData;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
+
+import java.util.List;
 
 /**
  * Implements the "WordCount" program that computes a simple word occurrence
@@ -85,14 +92,33 @@ public class WordCount {
 			// group by the tuple field "0" and sum up tuple field "1"
 			.keyBy(0).sum(1);
 
-		// emit result
-		if (params.has("output")) {
-			counts.writeAsText(params.get("output"));
-		} else {
-			System.out.println("Printing result to stdout. Use --output to specify output path.");
-			counts.print();
-		}
-		// execute program
+		counts.addSink(new SplitSink<Tuple2<String, Integer>, Object>() {
+
+			@Override
+			public SinkManager<List<Object>> restoreSinkManager(List<Object> checkpoint) {
+				return null;
+			}
+
+			@Override
+			public SimpleVersionedSerializer<List<Object>> getSinkManagerCheckpointSerializer() {
+				return null;
+			}
+
+			@Override
+			public SplitWriter<Tuple2<String, Integer>, Object> createSplitWriter() {
+				return null;
+			}
+
+			@Override
+			public SplitCommitter<Object> createSplitCommitter() {
+				return null;
+			}
+
+			@Override
+			public SimpleVersionedSerializer<Object> getSplitSerializer() {
+				return null;
+			}
+		});
 		env.execute("Streaming WordCount");
 	}
 
