@@ -28,4 +28,6 @@ public interface SinkWriterContext {
 	boolean isRestored();
 
 	void sendSinkEventToSinkManager(SinkEvent sinkEvent);
+
+	int getSubtaskIndex();
 }

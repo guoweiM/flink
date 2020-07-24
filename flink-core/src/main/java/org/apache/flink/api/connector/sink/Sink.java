@@ -18,6 +18,7 @@
 
 package org.apache.flink.api.connector.sink;
 
+import org.apache.flink.api.common.state.OperatorStateStore;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.io.Serializable;
@@ -31,4 +32,16 @@ public interface Sink<T, SinkManagerCheckpointT> extends Serializable {
 	SinkManager<SinkManagerCheckpointT> restoreSinkManager(SinkManagerCheckpointT checkpoint);
 
 	SimpleVersionedSerializer<SinkManagerCheckpointT> getSinkManagerCheckpointSerializer();
+
+	/**
+	 * TODO DOC.
+	 */
+	interface InitialContext {
+
+		OperatorStateStore getOperatorStateStore();
+
+		boolean isRestored();
+
+		int getSubtaskIndex();
+	}
 }

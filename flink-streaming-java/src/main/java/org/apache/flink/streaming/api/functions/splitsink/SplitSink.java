@@ -23,12 +23,13 @@ import org.apache.flink.api.connector.sink.SinkManager;
 import org.apache.flink.api.connector.sink.SinkWriter;
 import org.apache.flink.api.connector.sink.SinkWriterContext;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 
 import java.util.List;
 
 public abstract class SplitSink<T, SplitT> implements Sink<T, List<SplitT>> {
 
-	public abstract SplitWriter<T, SplitT> createSplitWriter();
+	public abstract SplitWriter<T, SplitT> createSplitWriter(SinkWriterContext sinkWriterContext) throws Exception;
 
 	public abstract SplitCommitter<SplitT> createSplitCommitter();
 
@@ -37,7 +38,7 @@ public abstract class SplitSink<T, SplitT> implements Sink<T, List<SplitT>> {
 	public SinkWriter<T> createWriter(SinkWriterContext sinkWriterContext) throws Exception {
 		return new SplitSinkWriter<>(
 			sinkWriterContext.isRestored(),
-			createSplitWriter(),
+			createSplitWriter(sinkWriterContext),
 			createSplitCommitter(),
 			getSplitSerializer(),
 			sinkWriterContext);
@@ -55,5 +56,14 @@ public abstract class SplitSink<T, SplitT> implements Sink<T, List<SplitT>> {
 	@Override
 	public SimpleVersionedSerializer<List<SplitT>> getSinkManagerCheckpointSerializer() {
 		return null;
+	}
+
+	/**
+	 * TODO DOC.
+	 */
+	public interface FileSinkWriterContext extends SinkWriterContext {
+
+		ProcessingTimeService getProcessingTimeService();
+
 	}
 }

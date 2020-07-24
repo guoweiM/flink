@@ -26,6 +26,7 @@ import org.apache.flink.api.connector.sink.SinkWriterContext;
 import org.apache.flink.core.io.SimpleVersionedSerialization;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -74,8 +75,8 @@ public class SplitSinkWriter<IN, SplitT> implements SinkWriter<IN> {
 	}
 
 	@Override
-	public void write(IN in, Context context) {
-		splitWriter.write(in);
+	public void write(IN in, Context context) throws Exception {
+		splitWriter.write(in, context);
 	}
 
 	@Override
@@ -88,7 +89,7 @@ public class SplitSinkWriter<IN, SplitT> implements SinkWriter<IN> {
 	}
 
 	@Override
-	public void commitUpTo(long checkpointId) {
+	public void commitUpTo(long checkpointId) throws IOException {
 		Iterator<Map.Entry<Long, List<SplitT>>> it =
 			splitsPerCheckpoint.headMap(checkpointId, true).entrySet().iterator();
 
@@ -99,13 +100,13 @@ public class SplitSinkWriter<IN, SplitT> implements SinkWriter<IN> {
 	}
 
 	@Override
-	public void flush() {
+	public void flush() throws Exception {
 		splitWriter.flush();
 		List<SplitT> splits = persist(Long.MAX_VALUE);
 		sinkWriterContext.sendSinkEventToSinkManager(new FinalSplitsEvent<>(splits));
 	}
 
-	private List<SplitT> persist(long checkpointId) {
+	private List<SplitT> persist(long checkpointId) throws Exception {
 		final List<SplitT> splits = splitWriter.preCommit();
 		final List<SplitT> allSplits = new ArrayList<>();
 		splitsPerCheckpoint.put(checkpointId, splits);

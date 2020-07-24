@@ -18,15 +18,11 @@
 
 package org.apache.flink.streaming.api.functions.sink.filesystem;
 
-import org.apache.flink.api.connector.sink.SinkWriter;
+import org.apache.flink.api.connector.sink.SinkWriterContext;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.streaming.api.functions.splitsink.SplitCommitter;
 import org.apache.flink.streaming.api.functions.splitsink.SplitSink;
 import org.apache.flink.streaming.api.functions.splitsink.SplitWriter;
-import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
-
-import javax.naming.InitialContext;
-import java.io.FileWriter;
 
 
 /**
@@ -35,6 +31,9 @@ import java.io.FileWriter;
  * @param <BucketID>
  */
 public class FileSink<IN, BucketID> extends SplitSink<IN, FileSinkSplit> {
+
+	private static final long serialVersionUID = -4030601241044738462L;
+
 
 	private final StreamingFileSink.BucketsBuilder<IN, BucketID, ? extends StreamingFileSink.BucketsBuilder<IN, BucketID, ?>> bucketsBuilder;
 
@@ -52,13 +51,8 @@ public class FileSink<IN, BucketID> extends SplitSink<IN, FileSinkSplit> {
 	}
 
 	@Override
-	public SinkWriter<IN> createWriter(InitialContext context) throws Exception {
-		return
-	}
-
-	@Override
-	public SplitWriter<IN, FileSinkSplit> createSplitWriter() {
-		return  new FileWriter<>(context, bucketsBuilder, bucketCheckInterval);;
+	public SplitWriter<IN, FileSinkSplit> createSplitWriter(SinkWriterContext sinkWriterContext) throws Exception {
+		return  new FileSinkWriter(sinkWriterContext, bucketsBuilder, bucketCheckInterval);
 	}
 
 	public SplitCommitter<FileSinkSplit> createSplitCommitter() {
@@ -70,11 +64,4 @@ public class FileSink<IN, BucketID> extends SplitSink<IN, FileSinkSplit> {
 		return null;
 	}
 
-	/**
-	 * TODO: where to put this context
-	 */
-	interface FileSinkInitialContext extends InitialContext {
-
-		ProcessingTimeService getProcessingTimeService();
-	}
 }

@@ -25,7 +25,6 @@ import org.apache.flink.api.common.typeutils.base.array.BytePrimitiveArraySerial
 import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.SinkEvent;
 import org.apache.flink.api.connector.sink.SinkWriter;
-import org.apache.flink.api.connector.sink.SinkWriterContext;
 import org.apache.flink.core.io.SimpleVersionedSerialization;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
@@ -33,7 +32,9 @@ import org.apache.flink.runtime.sink.event.SinkEventWrapper;
 import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.streaming.api.functions.splitsink.SplitSink;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -85,7 +86,22 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 
 	@Override
 	public void processElement(StreamRecord<IN> element) throws Exception {
-		sinkWriter.write(element.getValue());
+		sinkWriter.write(element.getValue(), new SinkWriter.Context() {
+			@Override
+			public long currentProcessingTime() {
+				return 0;
+			}
+
+			@Override
+			public long currentWatermark() {
+				return 0;
+			}
+
+			@Override
+			public Long timestamp() {
+				return element.getTimestamp();
+			}
+		});
 	}
 
 	@Override
@@ -107,21 +123,21 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 	@Override
 	public void notifyCheckpointComplete(long checkpointId) throws IOException {
 		sinkWriter.commitUpTo(checkpointId);
-
-
 		Iterator<Map.Entry<Long, List<SinkEvent>>> it = eventSentToSinkManager.headMap(checkpointId, false).entrySet().iterator();
 		while (it.hasNext()) {
 			it.remove();
 		}
+
+		System.err.println(eventSentToSinkManager.size());
 	}
 
 	@Override
-	public void endInput() {
+	public void endInput() throws Exception {
 		//last we could not u
 		sinkWriter.flush();
 	}
 
-	class UnifiedSinkWriterContext implements SinkWriterContext {
+	class UnifiedSinkWriterContext implements SplitSink.FileSinkWriterContext {
 
 		List<SinkEvent> currentSinkEvents = new ArrayList<>();
 
@@ -149,11 +165,21 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 			currentSinkEvents.add(sinkEvent);
 		}
 
+		@Override
+		public int getSubtaskIndex() {
+			return getRuntimeContext().getIndexOfThisSubtask();
+		}
+
 		//this is just current implementation
 		public void flush() {
 			for (SinkEvent sinkEvent : currentSinkEvents) {
 				operatorEventGateway.sendEventToCoordinator(new SinkEventWrapper(sinkEvent));
 			}
+		}
+
+		@Override
+		public ProcessingTimeService getProcessingTimeService() {
+			return getRuntimeContext().getProcessingTimeService();
 		}
 	}
 }

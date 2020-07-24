@@ -24,7 +24,7 @@ import org.apache.flink.api.connector.sink.SinkWriter;
 import java.io.IOException;
 import java.util.List;
 
-public interface SplitWriter<IN, SplitT> {
+public interface SplitWriter<IN, SplitT> extends AutoCloseable {
 
 	void write(IN in, SinkWriter.Context context) throws Exception;
 

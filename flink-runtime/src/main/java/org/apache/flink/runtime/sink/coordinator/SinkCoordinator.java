@@ -27,6 +27,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.sink.event.SinkEventWrapper;
 
 import javax.annotation.Nullable;
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -80,7 +81,11 @@ public class SinkCoordinator<CheckpointT> implements OperatorCoordinator {
 
 	@Override
 	public void checkpointComplete(long checkpointId) {
-		sinkManager.checkpointComplete(checkpointId);
+		try {
+			sinkManager.checkpointComplete(checkpointId);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override

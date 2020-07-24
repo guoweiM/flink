@@ -1,12 +1,18 @@
+
+
+package org.apache.flink.streaming.api.functions.sink.filesystem;
+
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.common.typeutils.base.array.BytePrimitiveArraySerializer;
 import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.SinkWriter;
+import org.apache.flink.api.connector.sink.SinkWriterContext;
 import org.apache.flink.streaming.api.functions.sink.filesystem.Buckets;
 import org.apache.flink.streaming.api.functions.sink.filesystem.FileSinkSplit;
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
+import org.apache.flink.streaming.api.functions.splitsink.SplitSink;
 import org.apache.flink.streaming.api.functions.splitsink.SplitWriter;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeCallback;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
@@ -38,13 +44,13 @@ public class FileSinkWriter<IN, BucketID> implements SplitWriter<IN, FileSinkSpl
 	private final long bucketCheckInterval;
 
 	public FileSinkWriter(
-		Sink.InitialContext context,
+		SinkWriterContext context,
 		StreamingFileSink.BucketsBuilder<IN, BucketID, ? extends StreamingFileSink.BucketsBuilder<IN, BucketID, ?>> bucketsBuilder,
 		long bucketCheckInterval) throws Exception {
 
-		final SinkInitialContext sinkInitialContext = (SinkInitialContext) context;
+		final SplitSink.FileSinkWriterContext sinkInitialContext = (SplitSink.FileSinkWriterContext) context;
 
-		this.buckets = bucketsBuilder.createBuckets(context.getSubtaskIndex());
+		this.buckets = bucketsBuilder.createBuckets(sinkInitialContext.getSubtaskIndex());
 		this.processingTimeService = sinkInitialContext.getProcessingTimeService();
 		this.bucketCheckInterval = bucketCheckInterval;
 

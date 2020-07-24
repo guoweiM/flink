@@ -18,12 +18,30 @@
 package org.apache.flink.streaming.examples.wordcount;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.common.serialization.Encoder;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.time.Time;
+import org.apache.flink.api.common.typeutils.base.IntSerializer;
+import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.SinkManager;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.MultipleParameterTool;
+import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.runtime.state.FunctionInitializationContext;
+import org.apache.flink.runtime.state.FunctionSnapshotContext;
+import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.sink.filesystem.BucketAssigner;
+import org.apache.flink.streaming.api.functions.sink.filesystem.FileSink;
+import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
+import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.functions.splitsink.SplitCommitter;
 import org.apache.flink.streaming.api.functions.splitsink.SplitSink;
 import org.apache.flink.streaming.api.functions.splitsink.SplitWriter;
@@ -31,7 +49,9 @@ import org.apache.flink.streaming.examples.wordcount.util.WordCountData;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
 
+import java.io.PrintStream;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Implements the "WordCount" program that computes a simple word occurrence
@@ -57,69 +77,27 @@ public class WordCount {
 	// *************************************************************************
 
 	public static void main(String[] args) throws Exception {
-
-		// Checking input parameters
-		final MultipleParameterTool params = MultipleParameterTool.fromArgs(args);
-
-		// set up the execution environment
 		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-		// make parameters available in the web interface
-		env.getConfig().setGlobalJobParameters(params);
+		env.setParallelism(4);
+		env.enableCheckpointing(5000L);
+		env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, Time.of(10L, TimeUnit.SECONDS)));
 
-		// get input data
-		DataStream<String> text = null;
-		if (params.has("input")) {
-			// union all the inputs from text files
-			for (String input : params.getMultiParameterRequired("input")) {
-				if (text == null) {
-					text = env.readTextFile(input);
-				} else {
-					text = text.union(env.readTextFile(input));
-				}
-			}
-			Preconditions.checkNotNull(text, "Input DataStream should not be null.");
-		} else {
-			System.out.println("Executing WordCount example with default input data set.");
-			System.out.println("Use --input to specify file input.");
-			// get default test text data
-			text = env.fromElements(WordCountData.WORDS);
-		}
+		final FileSink<Tuple2<Integer, Integer>, String> sink = StreamingFileSink
+			.forRowFormat(new Path("/Users/maguowei/tmp"), (Encoder<Tuple2<Integer, Integer>>) (element, stream) -> {
+				PrintStream out = new PrintStream(stream);
+				out.println(element.f1);
+			})
+			.withBucketAssigner(new KeyBucketAssigner())
+			.withRollingPolicy(OnCheckpointRollingPolicy.build())
+			.buildFileSink();
 
-		DataStream<Tuple2<String, Integer>> counts =
-			// split up the lines in pairs (2-tuples) containing: (word,1)
-			text.flatMap(new Tokenizer())
-			// group by the tuple field "0" and sum up tuple field "1"
-			.keyBy(0).sum(1);
+		// generate data, shuffle, sinkSin
+		env.addSource(new Generator(10, 10, 60))
+			.keyBy(0)
+			.addSink(sink);
 
-		counts.addSink(new SplitSink<Tuple2<String, Integer>, Object>() {
-
-			@Override
-			public SinkManager<List<Object>> restoreSinkManager(List<Object> checkpoint) {
-				return null;
-			}
-
-			@Override
-			public SimpleVersionedSerializer<List<Object>> getSinkManagerCheckpointSerializer() {
-				return null;
-			}
-
-			@Override
-			public SplitWriter<Tuple2<String, Integer>, Object> createSplitWriter() {
-				return null;
-			}
-
-			@Override
-			public SplitCommitter<Object> createSplitCommitter() {
-				return null;
-			}
-
-			@Override
-			public SimpleVersionedSerializer<Object> getSplitSerializer() {
-				return null;
-			}
-		});
-		env.execute("Streaming WordCount");
+		env.execute("StreamingFileSinkProgram");
 	}
 
 	// *************************************************************************
@@ -145,6 +123,87 @@ public class WordCount {
 					out.collect(new Tuple2<>(token, 1));
 				}
 			}
+		}
+	}
+
+	/**
+	 * Use first field for buckets.
+	 */
+	public static final class KeyBucketAssigner implements BucketAssigner<Tuple2<Integer, Integer>, String> {
+
+		private static final long serialVersionUID = 987325769970523326L;
+
+		@Override
+		public String getBucketId(final Tuple2<Integer, Integer> element, final Context context) {
+			return String.valueOf(element.f0);
+		}
+
+		@Override
+		public SimpleVersionedSerializer<String> getSerializer() {
+			return SimpleVersionedStringSerializer.INSTANCE;
+		}
+	}
+
+	/**
+	 * Data-generating source function.
+	 */
+	public static final class Generator implements SourceFunction<Tuple2<Integer, Integer>>, CheckpointedFunction {
+
+		private static final long serialVersionUID = -2819385275681175792L;
+
+		private final int numKeys;
+		private final int idlenessMs;
+		private final int recordsToEmit;
+
+		private volatile int numRecordsEmitted = 0;
+		private volatile boolean canceled = false;
+
+		private ListState<Integer> state = null;
+
+		Generator(final int numKeys, final int idlenessMs, final int durationSeconds) {
+			this.numKeys = numKeys;
+			this.idlenessMs = idlenessMs;
+
+			this.recordsToEmit = ((durationSeconds * 1000) / idlenessMs) * numKeys;
+		}
+
+		@Override
+		public void run(final SourceContext<Tuple2<Integer, Integer>> ctx) throws Exception {
+			while (numRecordsEmitted < recordsToEmit) {
+				synchronized (ctx.getCheckpointLock()) {
+					for (int i = 0; i < numKeys; i++) {
+						ctx.collect(Tuple2.of(i, numRecordsEmitted));
+						numRecordsEmitted++;
+					}
+				}
+				Thread.sleep(idlenessMs);
+			}
+
+			while (!canceled) {
+				Thread.sleep(50);
+			}
+
+		}
+
+		@Override
+		public void cancel() {
+			canceled = true;
+		}
+
+		@Override
+		public void initializeState(FunctionInitializationContext context) throws Exception {
+			state = context.getOperatorStateStore().getListState(
+				new ListStateDescriptor<Integer>("state", IntSerializer.INSTANCE));
+
+			for (Integer i : state.get()) {
+				numRecordsEmitted += i;
+			}
+		}
+
+		@Override
+		public void snapshotState(FunctionSnapshotContext context) throws Exception {
+			state.clear();
+			state.add(numRecordsEmitted);
 		}
 	}
 

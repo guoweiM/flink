@@ -429,6 +429,7 @@ public class StreamingJobGraphGenerator {
 			try {
 				jobVertex.addOperatorCoordinator(new SerializedValue<>(coordinatorProvider));
 			} catch (IOException e) {
+				System.err.println(coordinatorProvider.getClass().getName());
 				throw new FlinkRuntimeException(String.format(
 						"Coordinator Provider for node %s is not serializable.", chainedNames.get(streamNodeId)));
 			}

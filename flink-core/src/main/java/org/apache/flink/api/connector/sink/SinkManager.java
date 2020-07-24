@@ -18,6 +18,8 @@
 
 package org.apache.flink.api.connector.sink;
 
+import java.io.IOException;
+
 public interface SinkManager<CheckpointT> {
 
 	void handleSinkEvent(int subtaskIndex, SinkEvent sinkEvent);
@@ -26,5 +28,5 @@ public interface SinkManager<CheckpointT> {
 
 	CheckpointT checkpoint(long checkpointId);
 
-	void checkpointComplete(long checkpointId);
+	void checkpointComplete(long checkpointId) throws IOException;
 }

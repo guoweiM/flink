@@ -18,15 +18,17 @@
 
 package org.apache.flink.api.connector.sink;
 
+import java.io.IOException;
+
 public interface SinkWriter<T> {
 
-	void write(T t, Context context);
+	void write(T t, Context context) throws Exception;
 
 	void preCommit(long checkpointId) throws Exception;
 
-	void commitUpTo(long checkpointId);
+	void commitUpTo(long checkpointId) throws IOException;
 
-	void flush();
+	void flush() throws IOException, Exception;
 
 	/**
 	 * TODO java doc.
