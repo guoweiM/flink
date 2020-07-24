@@ -16,12 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.functions.splitsink;
+package org.apache.flink.streaming.api.functions.sink.filesystem;
 
-import java.io.IOException;
-import java.util.List;
-
-public interface SplitCommitter<SplitT> extends AutoCloseable{
-
-	void commit(List<SplitT> splits) throws IOException;
+public class FileSink {
 }
