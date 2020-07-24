@@ -55,7 +55,6 @@ public class SplitSinkWriter<IN, SplitT> implements SinkWriter<IN> {
 		SplitWriter<IN, SplitT> splitWriter,
 		SplitCommitter<SplitT> splitCommitter,
 		SimpleVersionedSerializer<SplitT> splitSimpleVersionedSerializer,
-		ListState<byte[]> splitsState,
 		SinkWriterContext sinkWriterContext) throws Exception {
 
 		this.splitWriter = splitWriter;

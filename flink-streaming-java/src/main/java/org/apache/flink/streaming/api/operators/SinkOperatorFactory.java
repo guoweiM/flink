@@ -16,16 +16,25 @@
  * limitations under the License.
  */
 
+package org.apache.flink.streaming.api.operators;
 
-package org.apache.flink.api.connector.sink;
+import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 
-import org.apache.flink.api.common.state.OperatorStateStore;
+public class SinkOperatorFactory extends AbstractStreamOperatorFactory<Object>
+	implements CoordinatedOperatorFactory<Object>{
+	@Override
+	public OperatorCoordinator.Provider getCoordinatorProvider(String operatorName, OperatorID operatorID) {
+		return null;
+	}
 
-public interface SinkWriterContext {
+	@Override
+	public <T extends StreamOperator<Object>> T createStreamOperator(StreamOperatorParameters<Object> parameters) {
+		return null;
+	}
 
-	OperatorStateStore getOperatorStateStore();
-
-	boolean isRestored();
-
-	void sendSinkEventToSinkManager(SinkEvent sinkEvent);
+	@Override
+	public Class<? extends StreamOperator> getStreamOperatorClass(ClassLoader classLoader) {
+		return null;
+	}
 }

@@ -16,12 +16,12 @@
  * limitations under the License.
  */
 
-
 package org.apache.flink.streaming.api.functions.splitsink;
 
 import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.SinkManager;
 import org.apache.flink.api.connector.sink.SinkWriter;
+import org.apache.flink.api.connector.sink.SinkWriterContext;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.util.List;
@@ -34,16 +34,16 @@ public abstract class SplitSink<T, SplitT> implements Sink<T, List<SplitT>> {
 
 	public abstract SimpleVersionedSerializer<SplitT> getSplitSerializer();
 
-	public SinkWriter<T> createWriter() {
-		new SplitSinkWriter<>(
+	public SinkWriter<T> createWriter(SinkWriterContext sinkWriterContext) throws Exception {
+		return new SplitSinkWriter<>(
+			sinkWriterContext.isRestored(),
 			createSplitWriter(),
 			createSplitCommitter(),
 			getSplitSerializer(),
-			null,
-			null, sinkWriterContext);
+			sinkWriterContext);
 	}
 
 	public SinkManager<List<SplitT>> createSinkManager() {
-		return new SplitSinkManager<List<SplitT>>(createSplitCommitter());
+		return new SplitSinkManager<>(createSplitCommitter());
 	}
 }

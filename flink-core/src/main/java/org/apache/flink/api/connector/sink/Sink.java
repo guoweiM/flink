@@ -22,7 +22,7 @@ import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 public interface Sink<T, SinkManagerCheckpointT> {
 
-	SinkWriter<T> createWriter(SinkWriterContext sinkWriterContext);
+	SinkWriter<T> createWriter(SinkWriterContext sinkWriterContext) throws Exception;
 
 	SinkManager<SinkManagerCheckpointT> createSinkManager();
 

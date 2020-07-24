@@ -29,7 +29,11 @@ import org.apache.flink.runtime.sink.event.SinkEventWrapper;
 import javax.annotation.Nullable;
 import java.util.concurrent.CompletableFuture;
 
-public class SinkOperatorCoordinator<CheckpointT> implements OperatorCoordinator {
+/**
+ * java doc TODO.
+ * @param <CheckpointT>
+ */
+public class SinkCoordinator<CheckpointT> implements OperatorCoordinator {
 
 	private SinkManager<CheckpointT> sinkManager;
 
@@ -37,7 +41,7 @@ public class SinkOperatorCoordinator<CheckpointT> implements OperatorCoordinator
 
 	private final SimpleVersionedSerializer<CheckpointT> checkpointSimpleVersionedSerializer;
 
-	public SinkOperatorCoordinator(Sink<?, CheckpointT> sink, SimpleVersionedSerializer<CheckpointT> checkpointSimpleVersionedSerializer) {
+	public SinkCoordinator(Sink<?, CheckpointT> sink, SimpleVersionedSerializer<CheckpointT> checkpointSimpleVersionedSerializer) {
 		this.sink = sink;
 		this.checkpointSimpleVersionedSerializer = checkpointSimpleVersionedSerializer;
 	}
