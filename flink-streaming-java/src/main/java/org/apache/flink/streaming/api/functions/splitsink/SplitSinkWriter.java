@@ -94,14 +94,13 @@ public class SplitSinkWriter<IN, SplitT> implements SinkWriter<IN> {
 	@Override
 	public void commitUpTo(long checkpointId) throws IOException {
 
-		System.err.println("commit up to ......" + checkpointId);
-
 		Iterator<Map.Entry<Long, List<SplitT>>> it =
 			splitsPerCheckpoint.headMap(checkpointId, true).entrySet().iterator();
 
 		while (it.hasNext()) {
 			Map.Entry<Long, List<SplitT>> item = it.next();
 			splitCommitter.commit(item.getValue());
+			it.remove();
 		}
 	}
 

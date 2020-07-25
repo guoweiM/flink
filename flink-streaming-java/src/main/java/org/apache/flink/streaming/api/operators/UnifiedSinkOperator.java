@@ -135,14 +135,14 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 			it.next();
 			it.remove();
 		}
-
-		System.err.println(eventSentToSinkManager.size());
 	}
 
 	@Override
 	public void endInput() throws Exception {
 		//last we could not u
 		sinkWriter.flush();
+
+		unifiedSinkWriterContext.flush();
 	}
 
 	class UnifiedSinkWriterContext implements SplitSink.FileSinkWriterContext {

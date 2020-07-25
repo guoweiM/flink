@@ -142,9 +142,6 @@ class LocalRecoverableFsDataOutputStream extends RecoverableFsDataOutputStream {
 			if (src.length() != recoverable.offset()) {
 				// something was done to this file since the committer was created.
 				// this is not the "clean" case
-				System.err.println(src.length() + "|||" + recoverable.offset());
-				System.err.println("src name = " + src.getAbsolutePath());
-				System.err.println("desc name = " + dest.getAbsolutePath());
 				throw new IOException("Cannot clean commit: File has trailing junk data.");
 			}
 

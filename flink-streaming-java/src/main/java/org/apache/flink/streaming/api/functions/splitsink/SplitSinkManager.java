@@ -40,8 +40,16 @@ public class SplitSinkManager<SplitT> implements SinkManager<List<SplitT>> {
 	@Override
 	public void handleSinkEvent(int subtaskIndex, SinkEvent sinkEvent) {
 		final FinalSplitsEvent<SplitT> finalSplitsEvent = (FinalSplitsEvent<SplitT>) sinkEvent;
-
+		for (SplitT split : finalSplitsEvent.getSplits()) {
+			System.err.println(split);
+		}
+//		try {
+//			splitCommitter.commit(finalSplitsEvent.getSplits());
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
 		allFinalSplits.put(subtaskIndex, finalSplitsEvent.getSplits());
+
 	}
 
 	@Override

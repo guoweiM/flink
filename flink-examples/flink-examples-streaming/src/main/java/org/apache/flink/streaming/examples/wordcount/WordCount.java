@@ -31,6 +31,7 @@ import org.apache.flink.api.java.utils.MultipleParameterTool;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
@@ -93,7 +94,7 @@ public class WordCount {
 			.buildFileSink();
 
 		// generate data, shuffle, sinkSin
-		env.addSource(new Generator(10, 10, 10))
+		env.addSource(new Generator(10, 1, 10))
 			.keyBy(0)
 			.addSink(sink);
 
@@ -147,7 +148,7 @@ public class WordCount {
 	/**
 	 * Data-generating source function.
 	 */
-	public static final class Generator implements SourceFunction<Tuple2<Integer, Integer>>, CheckpointedFunction {
+	public static final class Generator implements SourceFunction<Tuple2<Integer, Integer>>, CheckpointedFunction, CheckpointListener {
 
 		private static final long serialVersionUID = -2819385275681175792L;
 
@@ -160,11 +161,13 @@ public class WordCount {
 
 		private ListState<Integer> state = null;
 
+		private boolean checkpointFinish = false;
+
 		Generator(final int numKeys, final int idlenessMs, final int durationSeconds) {
 			this.numKeys = numKeys;
 			this.idlenessMs = idlenessMs;
 
-			this.recordsToEmit = ((durationSeconds * 1000) / idlenessMs) * numKeys;
+			this.recordsToEmit = ((durationSeconds * 10) / idlenessMs) * numKeys;
 		}
 
 		@Override
@@ -176,11 +179,25 @@ public class WordCount {
 						numRecordsEmitted++;
 					}
 				}
+				System.err.println("num send :" + numRecordsEmitted + " max :" + recordsToEmit);
 				Thread.sleep(idlenessMs);
 			}
 
-			while (!canceled) {
+			while (!canceled && checkpointFinish == false) {
 				Thread.sleep(50);
+			}
+
+			while (true) {
+				// wait for commit the file
+				Thread.sleep(idlenessMs * 1000) ;
+
+				synchronized (ctx.getCheckpointLock()) {
+					for (int i = 0; i < numKeys; i++) {
+						ctx.collect(Tuple2.of(i, numRecordsEmitted));
+						numRecordsEmitted++;
+					}
+				}
+				break;
 			}
 
 		}
@@ -204,6 +221,11 @@ public class WordCount {
 		public void snapshotState(FunctionSnapshotContext context) throws Exception {
 			state.clear();
 			state.add(numRecordsEmitted);
+		}
+
+		@Override
+		public void notifyCheckpointComplete(long checkpointId) throws Exception {
+			checkpointFinish = true;
 		}
 	}
 

@@ -25,11 +25,12 @@ import java.util.List;
 
 public class FinalSplitsEvent<SplitT> implements SinkEvent {
 
+	final List<SplitT> splits;
 	public FinalSplitsEvent(List<SplitT> splits) {
-
+		this.splits = splits;
 	}
 
 	List<SplitT> getSplits() {
-		return Collections.EMPTY_LIST;
+		return splits;
 	}
 }

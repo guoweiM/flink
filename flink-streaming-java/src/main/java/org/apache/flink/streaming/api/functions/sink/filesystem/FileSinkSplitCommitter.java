@@ -41,9 +41,10 @@ public class FileSinkSplitCommitter<IN, BucketID> implements SplitCommitter<File
 	@Override
 	public void commit(List<FileSinkSplit> checkpoints) throws IOException {
 		for (FileSinkSplit fileSinkSplit : checkpoints) {
-			if (fileSinkSplit.getInProgressFileRecoverable() != null) {
-				bucketWriter.cleanupInProgressFileRecoverable(fileSinkSplit.getInProgressFileRecoverable());
-			}
+			//TODO:: sometime it does not have to clean up.
+			//if (fileSinkSplit.getInProgressFileRecoverable() != null) {
+			//	bucketWriter.cleanupInProgressFileRecoverable(fileSinkSplit.getInProgressFileRecoverable());
+			//}
 
 			for (InProgressFileWriter.PendingFileRecoverable pendingFileRecoverable : fileSinkSplit.getPendingFileRecoverables()) {
 				bucketWriter.recoverPendingFile(pendingFileRecoverable).commit();

@@ -277,6 +277,7 @@ public class Bucket<IN, BucketID> {
 	}
 
 	void onSuccessfulCompletionOfCheckpoint(long checkpointId) throws IOException {
+
 		checkNotNull(bucketWriter);
 
 		Iterator<Map.Entry<Long, List<InProgressFileWriter.PendingFileRecoverable>>> it =
@@ -336,12 +337,6 @@ public class Bucket<IN, BucketID> {
 			closePartFile();
 		}
 		final FileSinkSplit fileSinkSplit = new FileSinkSplit(pendingFileRecoverablesForCurrentCheckpoint, lastInProgressFileRecoverable);
-		for (InProgressFileWriter.PendingFileRecoverable p : pendingFileRecoverablesForCurrentCheckpoint) {
-
-			System.err.println("begin ------");
-			System.err.println(p);
-			System.err.println("end --------");
-		}
 		pendingFileRecoverablesForCurrentCheckpoint = new ArrayList<>();
 		return fileSinkSplit;
 	}

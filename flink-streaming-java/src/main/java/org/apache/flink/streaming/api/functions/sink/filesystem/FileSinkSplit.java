@@ -18,12 +18,13 @@
 
 package org.apache.flink.streaming.api.functions.sink.filesystem;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
  * TODO java doc.
  */
-public class FileSinkSplit {
+public class FileSinkSplit implements Serializable {
 
 	/** this represents the data that could be committed when the checkpoint completes. */
 	private final List<InProgressFileWriter.PendingFileRecoverable> pendingFileRecoverables;
