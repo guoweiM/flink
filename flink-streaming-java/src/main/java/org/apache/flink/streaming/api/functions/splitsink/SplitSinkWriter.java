@@ -84,12 +84,18 @@ public class SplitSinkWriter<IN, SplitT> implements SinkWriter<IN> {
 		final List<SplitT> allSplits = persist(checkpointId);
 		splitsState.clear();
 		for (SplitT split : allSplits) {
-			splitsState.add(splitSimpleVersionedSerializer.serialize(split));
+			//TODO:: fix the serializer
+			// splitsState.add(splitSimpleVersionedSerializer.serialize(split));
+			break;
 		}
+		return;
 	}
 
 	@Override
 	public void commitUpTo(long checkpointId) throws IOException {
+
+		System.err.println("commit up to ......" + checkpointId);
+
 		Iterator<Map.Entry<Long, List<SplitT>>> it =
 			splitsPerCheckpoint.headMap(checkpointId, true).entrySet().iterator();
 

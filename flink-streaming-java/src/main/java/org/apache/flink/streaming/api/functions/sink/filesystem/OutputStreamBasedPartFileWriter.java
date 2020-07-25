@@ -146,6 +146,13 @@ public abstract class OutputStreamBasedPartFileWriter<IN, BucketID> extends Abst
 		RecoverableWriter.CommitRecoverable getCommitRecoverable() {
 			return commitRecoverable;
 		}
+
+		@Override
+		public String toString() {
+			return "OutputStreamBasedPendingFileRecoverable{" +
+				"commitRecoverable=" + commitRecoverable +
+				'}';
+		}
 	}
 
 	static final class OutputStreamBasedInProgressFileRecoverable implements InProgressFileRecoverable {

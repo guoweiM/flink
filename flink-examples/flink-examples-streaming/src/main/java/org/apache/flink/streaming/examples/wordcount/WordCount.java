@@ -93,7 +93,7 @@ public class WordCount {
 			.buildFileSink();
 
 		// generate data, shuffle, sinkSin
-		env.addSource(new Generator(10, 10, 60))
+		env.addSource(new Generator(10, 10, 10))
 			.keyBy(0)
 			.addSink(sink);
 

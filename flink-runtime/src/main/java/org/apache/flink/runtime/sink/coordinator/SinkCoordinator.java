@@ -44,6 +44,7 @@ public class SinkCoordinator<CheckpointT> implements OperatorCoordinator {
 
 	public SinkCoordinator(Sink<?, CheckpointT> sink, SimpleVersionedSerializer<CheckpointT> checkpointSimpleVersionedSerializer) {
 		this.sink = sink;
+		this.sinkManager = sink.createSinkManager();
 		this.checkpointSimpleVersionedSerializer = checkpointSimpleVersionedSerializer;
 	}
 
@@ -76,7 +77,12 @@ public class SinkCoordinator<CheckpointT> implements OperatorCoordinator {
 	@Override
 	public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> resultFuture) throws Exception {
 		final CheckpointT checkpoint = sinkManager.checkpoint(checkpointId);
-		resultFuture.complete(checkpointSimpleVersionedSerializer.serialize(checkpoint));
+		if (checkpointSimpleVersionedSerializer != null) {
+			resultFuture.complete(checkpointSimpleVersionedSerializer.serialize(checkpoint));
+		} else {
+			System.err.println("wait to fix the serializer");
+			resultFuture.complete(new byte[0]);
+		}
 	}
 
 	@Override

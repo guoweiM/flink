@@ -240,10 +240,7 @@ public class StreamingFileSink<IN>
 		}
 
 		public FileSink<IN, BucketID> buildFileSink() throws IOException {
-			return new FileSink(
-				this,
-				new RowWiseBucketWriter(FileSystem.get(basePath.toUri()).createRecoverableWriter(), encoder),
-				bucketCheckInterval);
+			return new FileSink(this, bucketCheckInterval, basePath, encoder);
 		}
 
 		/** Creates the actual sink. */

@@ -45,6 +45,7 @@ public class UnifiedSinkOperatorFactory<IN, CheckpointT> extends AbstractStreamO
 			UnifiedSinkOperator u = new UnifiedSinkOperator<>(
 				sink,
 				parameters.getOperatorEventDispatcher().getOperatorEventGateway(operatorId),
+				parameters.getProcessingTimeService(),
 				null);
 
 			u.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());

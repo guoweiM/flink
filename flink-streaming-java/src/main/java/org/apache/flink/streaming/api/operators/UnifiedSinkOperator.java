@@ -58,14 +58,21 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 
 	private final SimpleVersionedSerializer<SinkEvent> sinkEventSimpleVersionedSerializer;
 
+	private final ProcessingTimeService processingTimeService;
+
 	private SinkWriter<IN> sinkWriter;
 
 	private ListState<byte[]> sinkEventsState;
 
 	private UnifiedSinkWriterContext unifiedSinkWriterContext;
 
-	public UnifiedSinkOperator(Sink<IN, ?> sink, OperatorEventGateway operatorEventGateway, SimpleVersionedSerializer<SinkEvent> sinkEventSimpleVersionedSerializer) throws Exception {
+	public UnifiedSinkOperator(
+		Sink<IN, ?> sink,
+		OperatorEventGateway operatorEventGateway,
+		ProcessingTimeService processingTimeService,
+		SimpleVersionedSerializer<SinkEvent> sinkEventSimpleVersionedSerializer) {
 		this.sink = sink;
+		this.processingTimeService = processingTimeService;
 		this.operatorEventGateway = operatorEventGateway;
 		this.sinkEventSimpleVersionedSerializer = sinkEventSimpleVersionedSerializer;
 	}
@@ -125,6 +132,7 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 		sinkWriter.commitUpTo(checkpointId);
 		Iterator<Map.Entry<Long, List<SinkEvent>>> it = eventSentToSinkManager.headMap(checkpointId, false).entrySet().iterator();
 		while (it.hasNext()) {
+			it.next();
 			it.remove();
 		}
 
@@ -179,7 +187,7 @@ class UnifiedSinkOperator<IN> extends AbstractStreamOperator<Object> implements
 
 		@Override
 		public ProcessingTimeService getProcessingTimeService() {
-			return getRuntimeContext().getProcessingTimeService();
+			return processingTimeService;
 		}
 	}
 }

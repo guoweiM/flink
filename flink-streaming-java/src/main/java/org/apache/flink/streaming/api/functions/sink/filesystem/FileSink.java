@@ -18,11 +18,16 @@
 
 package org.apache.flink.streaming.api.functions.sink.filesystem;
 
+import org.apache.flink.api.common.serialization.Encoder;
 import org.apache.flink.api.connector.sink.SinkWriterContext;
+import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.streaming.api.functions.splitsink.SplitCommitter;
 import org.apache.flink.streaming.api.functions.splitsink.SplitSink;
 import org.apache.flink.streaming.api.functions.splitsink.SplitWriter;
+
+import java.io.IOException;
 
 
 /**
@@ -37,17 +42,21 @@ public class FileSink<IN, BucketID> extends SplitSink<IN, FileSinkSplit> {
 
 	private final StreamingFileSink.BucketsBuilder<IN, BucketID, ? extends StreamingFileSink.BucketsBuilder<IN, BucketID, ?>> bucketsBuilder;
 
-	private final BucketWriter<IN, BucketID> bucketWriter;
-
 	private final long bucketCheckInterval;
+
+	private final Path basePath;
+
+	private final Encoder<IN> encoder;
 
 	public FileSink(
 		StreamingFileSink.BucketsBuilder<IN, BucketID, ? extends StreamingFileSink.BucketsBuilder<IN, BucketID, ?>> bucketsBuilder,
-		BucketWriter<IN, BucketID> bucketWriter,
-		long bucketCheckInterval) {
+		long bucketCheckInterval,
+		Path path,
+		Encoder<IN> encoder) {
 		this.bucketsBuilder = bucketsBuilder;
-		this.bucketWriter = bucketWriter;
 		this.bucketCheckInterval = bucketCheckInterval;
+		this.basePath = path;
+		this.encoder = encoder;
 	}
 
 	@Override
@@ -56,7 +65,12 @@ public class FileSink<IN, BucketID> extends SplitSink<IN, FileSinkSplit> {
 	}
 
 	public SplitCommitter<FileSinkSplit> createSplitCommitter() {
-		return new FileSinkSplitCommitter(bucketWriter);
+		try {
+			return new FileSinkSplitCommitter(new RowWiseBucketWriter(FileSystem.get(basePath.toUri()).createRecoverableWriter(), encoder));
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new RuntimeException("fail to create committer");
+		}
 	}
 
 	@Override
