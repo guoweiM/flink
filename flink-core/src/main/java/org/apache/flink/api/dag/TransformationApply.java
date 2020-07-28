@@ -19,15 +19,30 @@
 package org.apache.flink.api.dag;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.ExecutionConfig;
 
 /**
  * Applies {@link Transformation Transformations} and potentially returns a new {@link
  * Transformation}.
  *
  * <p>I don't like that this is a separate interface, potentially we can integrate {@link
- * #apply(Object)} into {@link Transformation} itself, à la Beam.
+ * #apply(Context, InputT)} into {@link Transformation} itself, à la Beam.
  */
 @Internal
 public abstract class TransformationApply<InputT, OutputT> {
-	public abstract OutputT apply(InputT input);
+	public abstract OutputT apply(Context context, InputT input);
+
+	/**
+	 * Useful methods for {@link Transformation} application.
+	 */
+	public interface Context {
+
+		/**
+		 * Invokes the {@link org.apache.flink.api.java.ClosureCleaner}
+		 * on the given function if closure cleaning is enabled in the {@link ExecutionConfig}.
+		 *
+		 * @return The cleaned Function
+		 */
+		<F> F clean(F f);
+	}
 }

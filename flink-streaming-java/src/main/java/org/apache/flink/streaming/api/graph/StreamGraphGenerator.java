@@ -458,7 +458,7 @@ public class StreamGraphGenerator {
 		// could be an operator with an operator coordinator that does some magic.
 		CommitOperator<CommitT> commitOperator = new CommitOperator<>(
 				transform.getCommitFunction(),
-				transform.getCommitSerializer());
+				transform.getInput().getOutputType().createSerializer(executionConfig));
 
 		SimpleOperatorFactory<Void> commitOperatorFactory = SimpleOperatorFactory.of(commitOperator);
 

@@ -533,4 +533,10 @@ public abstract class Transformation<T> {
 		result = 31 * result + (int) (bufferTimeout ^ (bufferTimeout >>> 32));
 		return result;
 	}
+
+	public <OutputT> OutputT apply(
+			TransformationApply.Context context,
+			TransformationApply<Transformation<T>, OutputT> transformApply) {
+		return transformApply.apply(context, this);
+	}
 }

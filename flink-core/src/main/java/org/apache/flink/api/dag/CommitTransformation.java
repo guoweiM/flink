@@ -1,7 +1,8 @@
 package org.apache.flink.api.dag;
 
 import org.apache.flink.api.common.functions.CommitFunction;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.typeutils.TypeExtractor;
 
 import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 
@@ -13,12 +14,11 @@ import java.util.List;
  * ever that means. I'm really just spitballing here and this is an example of a new custom {@link
  * Transformation} that we could introduce.
  */
-public class CommitTransformation<CommitT> extends Transformation<CommitT> {
+public class CommitTransformation<CommitT> extends Transformation<Void> {
 
 	private final Transformation<CommitT> input;
 
 	private final CommitFunction<CommitT> commitFunction;
-	private final TypeSerializer<CommitT> commitSerializer;
 
 	/**
 	 * Creates a new {@code CommitTransformation} that has the given input and uses the given {@link
@@ -26,12 +26,10 @@ public class CommitTransformation<CommitT> extends Transformation<CommitT> {
 	 */
 	public CommitTransformation(
 			Transformation<CommitT> input,
-			CommitFunction<CommitT> commitFunction,
-			TypeSerializer<CommitT> commitSerializer) {
-		super("Commit", input.getOutputType(), 1);
+			CommitFunction<CommitT> commitFunction) {
+		super("Commit", (TypeInformation) TypeExtractor.getForClass(Object.class), 1);
 		this.input = input;
 		this.commitFunction = commitFunction;
-		this.commitSerializer = commitSerializer;
 	}
 
 	/**
@@ -46,13 +44,6 @@ public class CommitTransformation<CommitT> extends Transformation<CommitT> {
 	 */
 	public CommitFunction<CommitT> getCommitFunction() {
 		return commitFunction;
-	}
-
-	/**
-	 * Returns a {@link TypeSerializer} for {@link CommitT}.
-	 */
-	public TypeSerializer<CommitT> getCommitSerializer() {
-		return commitSerializer;
 	}
 
 	@Override

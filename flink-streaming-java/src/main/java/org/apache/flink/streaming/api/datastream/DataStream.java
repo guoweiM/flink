@@ -40,7 +40,9 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.dag.Sink;
 import org.apache.flink.api.dag.Transformation;
+import org.apache.flink.api.dag.TransformationApply;
 import org.apache.flink.api.java.Utils;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.io.CsvOutputFormat;
@@ -48,7 +50,6 @@ import org.apache.flink.api.java.io.TextOutputFormat;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.typeutils.InputTypeConfigurable;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
-import org.apache.flink.api.sink.Sink;
 import org.apache.flink.core.fs.FileSystem.WriteMode;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -1279,7 +1280,12 @@ public class DataStream<T> {
 	 * Applies the given {@link Sink}.
 	 */
 	public void sink(Sink<T> sink) {
-		Transformation<?> finalTransformation = sink.apply(transformation);
+		Transformation<?> finalTransformation = sink.apply(new TransformationApply.Context() {
+			@Override
+			public <F> F clean(F f) {
+				return DataStream.this.clean(f);
+			}
+		}, transformation);
 
 		// we need to come up with a better way of recording the transformations
 		getExecutionEnvironment().addOperator(finalTransformation);
