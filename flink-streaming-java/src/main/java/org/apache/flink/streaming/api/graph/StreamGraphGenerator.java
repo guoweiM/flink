@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.cache.DistributedCache;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.dag.CommitTransformation;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
@@ -30,8 +31,10 @@ import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
+import org.apache.flink.streaming.api.operators.CommitOperator;
 import org.apache.flink.streaming.api.operators.InputFormatOperatorFactory;
 import org.apache.flink.streaming.api.operators.OutputFormatOperatorFactory;
+import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 import org.apache.flink.streaming.api.transformations.AbstractMultipleInputTransformation;
 import org.apache.flink.streaming.api.transformations.CoFeedbackTransformation;
@@ -275,6 +278,8 @@ public class StreamGraphGenerator {
 			transformedIds = transformPartition((PartitionTransformation<?>) transform);
 		} else if (transform instanceof SideOutputTransformation<?>) {
 			transformedIds = transformSideOutput((SideOutputTransformation<?>) transform);
+		} else if (transform instanceof CommitTransformation<?>) {
+			transformedIds = transformCommit((CommitTransformation<?>) transform);
 		} else {
 			throw new IllegalStateException("Unknown transformation: " + transform);
 		}
@@ -429,6 +434,52 @@ public class StreamGraphGenerator {
 			virtualResultIds.add(virtualId);
 		}
 		return virtualResultIds;
+	}
+
+	/**
+	 * Transforms a {@code CommitTransformation}.
+	 *
+	 */
+	private <CommitT> Collection<Integer> transformCommit(CommitTransformation<CommitT> transform) {
+
+		Collection<Integer> inputIds = transform(transform.getInput());
+
+		// the recursive call might have already transformed this
+		if (alreadyTransformed.containsKey(transform)) {
+			return alreadyTransformed.get(transform);
+		}
+
+		String slotSharingGroup = determineSlotSharingGroup(
+				transform.getSlotSharingGroup(),
+				inputIds);
+
+		// create an operator for executing this. Once we have bounded/unbounded execution
+		// we can decide on different physical execution strategies for this. Could be an operator,
+		// could be an operator with an operator coordinator that does some magic.
+		CommitOperator<CommitT> commitOperator = new CommitOperator<>(
+				transform.getCommitFunction(),
+				transform.getCommitSerializer());
+
+		SimpleOperatorFactory<Void> commitOperatorFactory = SimpleOperatorFactory.of(commitOperator);
+
+		streamGraph.addOperator(
+				transform.getId(),
+				slotSharingGroup,
+				transform.getCoLocationGroupKey(),
+				commitOperatorFactory,
+				transform.getInput().getOutputType(),
+				null,
+				transform.getName());
+
+		// always parallelism 1
+		streamGraph.setParallelism(transform.getId(), 1);
+		streamGraph.setMaxParallelism(transform.getId(), 1);
+
+		for (Integer inputId : inputIds) {
+			streamGraph.addEdge(inputId, transform.getId(), 0);
+		}
+
+		return Collections.singleton(transform.getId());
 	}
 
 	/**

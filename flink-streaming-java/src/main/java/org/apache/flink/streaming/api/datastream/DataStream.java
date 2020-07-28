@@ -48,6 +48,7 @@ import org.apache.flink.api.java.io.TextOutputFormat;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.typeutils.InputTypeConfigurable;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
+import org.apache.flink.api.sink.Sink;
 import org.apache.flink.core.fs.FileSystem.WriteMode;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -1272,6 +1273,16 @@ public class DataStream<T> {
 	 */
 	protected DataStream<T> setConnectionType(StreamPartitioner<T> partitioner) {
 		return new DataStream<>(this.getExecutionEnvironment(), new PartitionTransformation<>(this.getTransformation(), partitioner));
+	}
+
+	/**
+	 * Applies the given {@link Sink}.
+	 */
+	public void sink(Sink<T> sink) {
+		Transformation<?> finalTransformation = sink.apply(transformation);
+
+		// we need to come up with a better way of recording the transformations
+		getExecutionEnvironment().addOperator(finalTransformation);
 	}
 
 	/**
