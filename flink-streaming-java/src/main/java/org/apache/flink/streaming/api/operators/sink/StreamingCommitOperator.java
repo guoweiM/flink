@@ -15,21 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators;
+package org.apache.flink.streaming.api.operators.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.functions.CommitFunction;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.core.io.SimpleVersionedSerialization;
-import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.CheckpointListener;
-import org.apache.flink.runtime.state.FunctionInitializationContext;
-import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkSplit;
+import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import java.util.*;
@@ -38,31 +36,28 @@ import java.util.*;
  * A {@link StreamOperator} for executing a {@link org.apache.flink.api.dag.CommitTransformation}.
  */
 @Internal
-public class CommitOperator<CommitT>
+public class StreamingCommitOperator<CommitT>
 		extends AbstractStreamOperator<Void>
-		implements OneInputStreamOperator<CommitT, Void>, BoundedOneInput , CheckpointedFunction, CheckpointListener {
+		implements OneInputStreamOperator<CommitT, Void>, CheckpointListener {
 
 	private static final long serialVersionUID = 1L;
 
 	private final CommitFunction<CommitT> commitFunction;
+
 	private final TypeSerializer<CommitT> commitSerializer;
 
 	private transient ListState<CommitT> commits;
 
-	private final OperatorEventGateway operatorEventGateway;
+	private final NavigableMap<Long, List<CommitT>> committablesPerCheckpoint = new TreeMap<>();
 
-	private final NavigableMap<Long, List<CommitT>> splitsPerCheckpoint = new TreeMap<>();
+	private List<CommitT> currentCommittables;
 
-	private List<CommitT> currentSplits;
-
-	public CommitOperator(
+	public StreamingCommitOperator(
 			CommitFunction<CommitT> commitFunction,
-			TypeSerializer<CommitT> commitSerializer,
-			OperatorEventGateway operatorEventGateway) {
+			TypeSerializer<CommitT> commitSerializer) {
 		this.commitFunction = commitFunction;
 		this.commitSerializer = commitSerializer;
-		this.operatorEventGateway = operatorEventGateway;
-		this.currentSplits = new ArrayList<>();
+		this.currentCommittables = new ArrayList<>();
 	}
 
 	@Override
@@ -77,71 +72,39 @@ public class CommitOperator<CommitT>
 		this.commits = context.getOperatorStateStore().getListState(commitStateDescriptor);
 
 		if (context.isRestored()) {
-			for(CommitT commit : commits.get()) {
+			for (CommitT commit : commits.get()) {
 				commitFunction.commit(commit);
 			}
 		}
 	}
 
 	@Override
-	public void endInput() throws Exception {
-		// potentially we should not commit right away here but set a flag and then commit
-		// once we get the next or final checkpoint complete notification
-		for (CommitT commit : commits.get()) {
-			commitFunction.commit(commit);
-		}
-
-
-
-		/** we could send to operator coordinator the like following **/
-
-
-		/**
-			List<CommitT> allCommits = new ArrayList<>();
-			for (List<CommitT> commitList : splitsPerCheckpoint.values()) {
-				allCommits.addAll(commitList);
-			}
-			FinalSplitsEvent finalSplitsEvent = new FinalSplitsEvent(allCommits);
-			operatorEventGateway.sendEventToCoordinator(finalSplitsEvent);
-		 **/
-
-	}
-
-	@Override
 	public void processElement(StreamRecord<CommitT> element) throws Exception {
-		currentSplits.add(element.getValue());
+		currentCommittables.add(element.getValue());
 	}
 
 	@Override
-	public void snapshotState(FunctionSnapshotContext context) throws Exception {
-		splitsPerCheckpoint.put(context.getCheckpointId(), currentSplits);
-		currentSplits = new ArrayList<>();
+	public void snapshotState(StateSnapshotContext context) throws Exception {
+		super.snapshotState(context);
 
-		// TODO snap shot all the splitsPerCheckpoint
+		committablesPerCheckpoint.put(context.getCheckpointId(), currentCommittables);
+
+		currentCommittables = new ArrayList<>();
+
 		return;
-	}
-
-	@Override
-	public void initializeState(FunctionInitializationContext context) throws Exception {
-
 	}
 
 	@Override
 	public void notifyCheckpointComplete(long checkpointId) throws Exception {
 		Iterator<Map.Entry<Long, List<CommitT>>> it =
-			splitsPerCheckpoint.headMap(checkpointId, true).entrySet().iterator();
+			committablesPerCheckpoint.headMap(checkpointId, true).entrySet().iterator();
 
 		while (it.hasNext()) {
 			Map.Entry<Long, List<CommitT>> item = it.next();
-			for(CommitT commit : item.getValue()) {
+			for (CommitT commit : item.getValue()) {
 				commitFunction.commit(commit);
 			}
 			it.remove();
 		}
-	}
-
-	@Override
-	public void notifyCheckpointAborted(long checkpointId) throws Exception {
-
 	}
 }

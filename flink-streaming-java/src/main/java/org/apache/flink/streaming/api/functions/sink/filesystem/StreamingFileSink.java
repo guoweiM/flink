@@ -32,7 +32,7 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.DateTimeBucketAssigner;
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkBuilder;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc5.FileSink;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.CheckpointRollingPolicy;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
@@ -240,15 +240,9 @@ public class StreamingFileSink<IN>
 			return new RowFormatBuilder(basePath, encoder, Preconditions.checkNotNull(assigner), Preconditions.checkNotNull(policy), bucketCheckInterval, new DefaultBucketFactoryImpl<>(), outputFileConfig);
 		}
 
-		public FileSinkBuilder<IN> buildFileSinkTopology() {
-			try {
-				return new FileSinkBuilder<>(this, basePath, encoder);
-			} catch (Exception e) {
-				e.printStackTrace();
-				throw new RuntimeException("fail build");
-			}
+		public FileSink<IN, BucketID> buildFileSink() {
+			return new FileSink<>(this, bucketCheckInterval, basePath, encoder);
 		}
-
 
 		/** Creates the actual sink. */
 		public StreamingFileSink<IN> build() {

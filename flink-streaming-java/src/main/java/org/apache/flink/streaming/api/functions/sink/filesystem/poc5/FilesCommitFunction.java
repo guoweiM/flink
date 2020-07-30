@@ -1,4 +1,4 @@
-package org.apache.flink.streaming.api.functions.sink.filesystem.poc3;
+package org.apache.flink.streaming.api.functions.sink.filesystem.poc5;
 
 import org.apache.flink.api.common.functions.CommitFunction;
 import org.apache.flink.api.common.serialization.Encoder;
@@ -10,7 +10,11 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.RowWiseBucketWri
 
 import java.io.IOException;
 
-public class FileSinkCommitFunction<T> implements CommitFunction<FileSinkSplit> {
+/**
+ * TODO doc.
+ * @param <T>
+ */
+public class FilesCommitFunction<T> implements CommitFunction<CommittableFiles> {
 
 	private transient BucketWriter<T, ?> bucketWriter;
 
@@ -18,24 +22,28 @@ public class FileSinkCommitFunction<T> implements CommitFunction<FileSinkSplit> 
 
 	private final Encoder<T> encoder;
 
-    FileSinkCommitFunction(Path basePath, Encoder<T> encoder) {
-        this.basePath = basePath;
-        this.encoder = encoder;
-    }
+	FilesCommitFunction(Path basePath, Encoder<T> encoder) {
+		this.basePath = basePath;
+		this.encoder = encoder;
+	}
 
-    @Override
-    public void commit(FileSinkSplit split) {
-        try {
-            if (bucketWriter == null) {
+	@Override
+	public void commit(CommittableFiles split) {
+		try {
+			if (bucketWriter == null) {
 				bucketWriter = new RowWiseBucketWriter(FileSystem.get(basePath.toUri()).createRecoverableWriter(), encoder);
-            }
-            //TODO:: maybe need some clean up
+			}
+
+			if (split.getInProgressFileRecoverable() != null) {
+				bucketWriter.cleanupInProgressFileRecoverable(split.getInProgressFileRecoverable());
+			}
+
 			for (InProgressFileWriter.PendingFileRecoverable pendingFileRecoverable : split.getPendingFileRecoverables()) {
 				bucketWriter.recoverPendingFile(pendingFileRecoverable).commit();
 			}
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException("fail commit");
-        }
-    }
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new RuntimeException("fail commit");
+		}
+	}
 }

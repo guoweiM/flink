@@ -1,25 +1,25 @@
-package org.apache.flink.streaming.api.operators;
+package org.apache.flink.streaming.api.operators.sink;
 
 import org.apache.flink.api.common.functions.CommitFunction;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.jobgraph.OperatorID;
-import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
+import org.apache.flink.streaming.api.operators.StreamOperator;
+import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
 
-public class CommitOperatorFactory<CommitT> extends AbstractStreamOperatorFactory<Void>
-	implements CoordinatedOperatorFactory<Void>{
+/**
+ * Java doc.
+ * @param <CommitT>
+ */
+public class StreamingCommitOperatorFactory<CommitT> extends AbstractStreamOperatorFactory<Void> {
 
 	private final CommitFunction<CommitT> commitFunction;
 
 	private final TypeSerializer<CommitT> commitSerializer;
 
-	public CommitOperatorFactory(CommitFunction<CommitT> commitFunction, TypeSerializer<CommitT> commitSerializer) {
+	public StreamingCommitOperatorFactory(CommitFunction<CommitT> commitFunction, TypeSerializer<CommitT> commitSerializer) {
 		this.commitFunction = commitFunction;
 		this.commitSerializer = commitSerializer;
-	}
-
-	@Override
-	public OperatorCoordinator.Provider getCoordinatorProvider(String operatorName, OperatorID operatorID) {
-		return new CommitCoordinatorProvider(operatorID);
 	}
 
 	@Override
@@ -27,15 +27,14 @@ public class CommitOperatorFactory<CommitT> extends AbstractStreamOperatorFactor
 		final OperatorID operatorId =
 			parameters.getStreamConfig().getOperatorID();
 
-		final CommitOperator<CommitT> commitOperator =
-			new CommitOperator<>(commitFunction, commitSerializer, parameters.getOperatorEventDispatcher().getOperatorEventGateway(operatorId));
+		final StreamingCommitOperator<CommitT> commitOperator =
+			new StreamingCommitOperator<>(commitFunction, commitSerializer);
 		commitOperator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
 		return (T) commitOperator;
 	}
 
 	@Override
 	public Class<? extends StreamOperator> getStreamOperatorClass(ClassLoader classLoader) {
-		//TODO:: fix
-		return CommitOperator.class;
+		return StreamingCommitOperator.class;
 	}
 }
