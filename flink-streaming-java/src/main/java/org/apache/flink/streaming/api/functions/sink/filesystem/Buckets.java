@@ -24,7 +24,8 @@ import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerialization;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkSplit;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc5.CommittableFiles;
+import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -33,10 +34,8 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -387,54 +386,46 @@ public class Buckets<IN, BucketID> {
 
 	// --------------------------- method for the new sink api -----------------
 
-	public List<FileSinkSplit> preCommit() throws IOException {
-		final Iterator<Map.Entry<BucketID, Bucket<IN, BucketID>>> activeBucketIt =
-			activeBuckets.entrySet().iterator();
-
-		final List<FileSinkSplit> fileSinkSplits = new ArrayList<>();
-
-		while (activeBucketIt.hasNext()) {
-			final Bucket<IN, BucketID> bucket = activeBucketIt.next().getValue();
-			final FileSinkSplit fileSinkSplit = bucket.preCommit();
-
-			fileSinkSplits.add(fileSinkSplit);
-			if (!bucket.isActive()) {
-				// We've dealt with all the pending files and the writer for this bucket is not currently open.
-				// Therefore this bucket is currently inactive and we can remove it from our state.
-				activeBucketIt.remove();
-				//TODO:: maybe need to set the state to the fileSinkSplit.
-				//notifyBucketInactive(bucket);
-			}
-		}
-		return fileSinkSplits;
-	}
-
 	public void persist(
-		final ListState<byte[]> bucketStatesContainer,
-		final ListState<Long> partCounterStateContainer) throws Exception {
+		Collector<CommittableFiles> output,
+		ListState<byte[]> bucketStatesContainer,
+		ListState<Long> partCounterStateContainer) throws Exception {
 
 		Preconditions.checkState(
 			bucketWriter != null && bucketStateSerializer != null,
 			"sink has not been initialized");
 
+		// 1. Clean up the old state
 		bucketStatesContainer.clear();
 		partCounterStateContainer.clear();
 
+		// 2. Persist the new counter
 		partCounterStateContainer.add(maxPartCounter);
 
-		for (Bucket<IN, BucketID> bucket : activeBuckets.values()) {
-			final BucketState bucketState = bucket.persist();
+		final Iterator<Map.Entry<BucketID, Bucket<IN, BucketID>>> activeBucketIt =
+			activeBuckets.entrySet().iterator();
 
-			final byte[] serializedBucketState = SimpleVersionedSerialization
-				.writeVersionAndSerialize(bucketStateSerializer, bucketState);
+		// 3. Persist the active bucket's state
+		while (activeBucketIt.hasNext()) {
+			final Bucket<IN, BucketID> bucket = activeBucketIt.next().getValue();
 
-			bucketStatesContainer.add(serializedBucketState);
+			// 3.1 Only the active bucket has state to be persisted or has something to output to the committer
+			if (bucket.isActive()) {
+				final BucketState<BucketID>  bucketState = bucket.persist(output);
+				final byte[] serializedBucketState = SimpleVersionedSerialization
+					.writeVersionAndSerialize(bucketStateSerializer, bucketState);
+				bucketStatesContainer.add(serializedBucketState);
+			} else {
+				// 3.2 Remove the non active bucket. There is neither pending files nor in-progress file in the non active bucket.
+				activeBucketIt.remove();
+			}
 		}
+
 	}
 
-	public void flush() {
+	public void flush(Collector<CommittableFiles> collector) throws IOException {
 		for (Bucket<IN, BucketID> bucket : activeBuckets.values()) {
-			bucket.flush();
+			bucket.flush(collector);
 		}
 	}
 

@@ -26,8 +26,9 @@ public class CommitTransformation<CommitT> extends Transformation<Void> {
 	 */
 	public CommitTransformation(
 			Transformation<CommitT> input,
-			CommitFunction<CommitT> commitFunction) {
-		super("Commit", (TypeInformation) TypeExtractor.getForClass(Object.class), 1);
+			CommitFunction<CommitT> commitFunction,
+			int parallelism) {
+		super("Commit", (TypeInformation) TypeExtractor.getForClass(Object.class), parallelism);
 		this.input = input;
 		this.commitFunction = commitFunction;
 	}
