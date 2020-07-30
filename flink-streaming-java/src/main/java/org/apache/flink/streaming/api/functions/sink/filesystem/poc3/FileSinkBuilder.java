@@ -1,6 +1,7 @@
 package org.apache.flink.streaming.api.functions.sink.filesystem.poc3;
 
 import org.apache.flink.api.common.serialization.Encoder;
+import org.apache.flink.api.dag.CommitTransformation;
 import org.apache.flink.api.dag.Sink;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.core.fs.Path;
@@ -31,6 +32,21 @@ public class FileSinkBuilder<T> extends Sink<T> {
 		 */
 		final Transformation<FileSinkSplit> mapped = input.apply(context, Map.of(new FileSinkFunction<>(bucketsBuilder)));
 
+		//What is order of the 3 commi transforamtion;
+
+
+		/**
+		 *
+		 * We might let user to decide how to do with the multi-commit transformations.
+		A ----> CommitTransformation1
+		|
+		| ----> B -------> CommitTransformation2 there will 5 file. 000>  down appication  ----> resultA  // doappplcation ----> resultB
+		       |
+		       |
+		       C --------> CommitTransformation3
+
+		 **/
+
 		/**
 		 *
 		 * 1. The {@link org.apache.flink.api.dag.CommitTransformation} means that FLINK would call the
@@ -44,6 +60,7 @@ public class FileSinkBuilder<T> extends Sink<T> {
 		 * 4. Open question: What is relation between the multiple commit transformations.
 		 */
 		final Transformation<Void> commit = (Transformation<Void>) mapped.apply(context, Commit.of(new FileSinkCommitFunction(basePath, encoder)));
+
 		return commit;
 	}
 
