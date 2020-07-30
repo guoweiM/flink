@@ -32,21 +32,8 @@ import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.operators.*;
-import org.apache.flink.streaming.api.transformations.AbstractMultipleInputTransformation;
-import org.apache.flink.streaming.api.transformations.CoFeedbackTransformation;
-import org.apache.flink.streaming.api.transformations.FeedbackTransformation;
-import org.apache.flink.streaming.api.transformations.KeyedMultipleInputTransformation;
-import org.apache.flink.streaming.api.transformations.LegacySourceTransformation;
-import org.apache.flink.streaming.api.transformations.OneInputTransformation;
-import org.apache.flink.streaming.api.transformations.PartitionTransformation;
-import org.apache.flink.streaming.api.transformations.PhysicalTransformation;
-import org.apache.flink.streaming.api.transformations.SelectTransformation;
-import org.apache.flink.streaming.api.transformations.SideOutputTransformation;
-import org.apache.flink.streaming.api.transformations.SinkTransformation;
-import org.apache.flink.streaming.api.transformations.SourceTransformation;
-import org.apache.flink.streaming.api.transformations.SplitTransformation;
-import org.apache.flink.streaming.api.transformations.TwoInputTransformation;
-import org.apache.flink.streaming.api.transformations.UnionTransformation;
+import org.apache.flink.streaming.api.operators.sink.StreamingCommitOperatorFactory;
+import org.apache.flink.streaming.api.transformations.*;
 import org.apache.flink.streaming.runtime.io.MultipleInputSelectionHandler;
 
 import org.slf4j.Logger;
@@ -449,27 +436,18 @@ public class StreamGraphGenerator {
 				transform.getSlotSharingGroup(),
 				inputIds);
 
-		// create an operator for executing this. Once we have bounded/unbounded execution
-		// we can decide on different physical execution strategies for this. Could be an operator,
-		// could be an operator with an operator coordinator that does some magic.
-//		CommitOperator<CommitT> commitOperator = new CommitOperator<>(
-//				transform.getCommitFunction(),
-//				transform.getInput().getOutputType().createSerializer(executionConfig));
-
-//		SimpleOperatorFactory<Void> commitOperatorFactory = SimpleOperatorFactory.of(commitOperator);
-
+		// It is the streaming execution mode we could choose the streaming committer
 		streamGraph.addOperator(
 				transform.getId(),
 				slotSharingGroup,
 				transform.getCoLocationGroupKey(),
-				new CommitOperatorFactory<>(transform.getCommitFunction(),transform.getInput().getOutputType().createSerializer(executionConfig)),
+				new StreamingCommitOperatorFactory<>(transform.getCommitFunction(), transform.getInput().getOutputType().createSerializer(executionConfig)),
 				transform.getInput().getOutputType(),
 				null,
 				transform.getName());
 
-		// always parallelism 1
-		streamGraph.setParallelism(transform.getId(), 1);
-		streamGraph.setMaxParallelism(transform.getId(), 1);
+		streamGraph.setParallelism(transform.getId(), transform.getInput().getParallelism());
+		streamGraph.setMaxParallelism(transform.getId(), transform.getInput().getMaxParallelism());
 
 		for (Integer inputId : inputIds) {
 			streamGraph.addEdge(inputId, transform.getId(), 0);

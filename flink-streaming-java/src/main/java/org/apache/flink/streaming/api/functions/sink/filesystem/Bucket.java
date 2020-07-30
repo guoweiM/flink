@@ -21,8 +21,9 @@ package org.apache.flink.streaming.api.functions.sink.filesystem;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc5.CommittableFiles;
+import org.apache.flink.util.Collector;
 
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkSplit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,11 +78,8 @@ public class Bucket<IN, BucketID> {
 	//---------------------------- begin for the new sink api ----------------------------
 
 	// This field represents the data needed to be cleanup. This field is only updated at the writer persisting happens.
-	// It would be return to the SinkSplit.
 	@Nullable
 	private InProgressFileWriter.InProgressFileRecoverable lastInProgressFileRecoverable = null;
-
-	private boolean isTerminated = false;
 
 	//---------------------------- end for the new sink api ------------------------------
 
@@ -278,7 +276,6 @@ public class Bucket<IN, BucketID> {
 	}
 
 	void onSuccessfulCompletionOfCheckpoint(long checkpointId) throws IOException {
-
 		checkNotNull(bucketWriter);
 
 		Iterator<Map.Entry<Long, List<InProgressFileWriter.PendingFileRecoverable>>> it =
@@ -330,23 +327,28 @@ public class Bucket<IN, BucketID> {
 
 	// ---------------------------------- method for the new sink api -------------------------------------------
 
-	public FileSinkSplit preCommit() throws IOException {
-		if (inProgressPart != null && (rollingPolicy.shouldRollOnCheckpoint(inProgressPart) || isTerminated)) {
+	public BucketState<BucketID> persist(Collector<CommittableFiles> output) throws IOException {
+
+		//1. Check the rolling policy
+		if (inProgressPart != null && (rollingPolicy.shouldRollOnCheckpoint(inProgressPart))) {
 			if (LOG.isDebugEnabled()) {
 				LOG.debug("Subtask {} closing in-progress part file for bucket id={} on checkpoint.", subtaskIndex, bucketId);
 			}
 			closePartFile();
 		}
-		final FileSinkSplit fileSinkSplit = new FileSinkSplit(pendingFileRecoverablesForCurrentCheckpoint, lastInProgressFileRecoverable);
+
+		//2. Send the committable to the committer
+		final CommittableFiles committableFiles = new CommittableFiles(pendingFileRecoverablesForCurrentCheckpoint, lastInProgressFileRecoverable);
+		output.collect(committableFiles);
+
+		//3. Clean up all the pending files that are sent to the committer
 		pendingFileRecoverablesForCurrentCheckpoint = new ArrayList<>();
-		return fileSinkSplit;
-	}
 
-	public BucketState<BucketID> persist() throws IOException {
-
+		//4. Reset the lastInProgressFileRecoverable
 		lastInProgressFileRecoverable = null;
 		long inProgressFileCreationTime = Long.MAX_VALUE;
 
+		//5. Persist the  writer's state
 		if (inProgressPart != null) {
 			lastInProgressFileRecoverable = inProgressPart.persist();
 			inProgressFileCreationTime = inProgressPart.getCreationTime();
@@ -355,8 +357,15 @@ public class Bucket<IN, BucketID> {
 		return new BucketState<>(bucketId, bucketPath, inProgressFileCreationTime, lastInProgressFileRecoverable, pendingFileRecoverablesPerCheckpoint);
 	}
 
-	public void flush() {
-		isTerminated = true;
+	void flush(Collector<CommittableFiles> collector) throws IOException {
+		//1. Close the pending file
+		closePartFile();
+		//2. Send the committable to the committer
+		//TODO:: make it a private function
+		final CommittableFiles committableFiles = new CommittableFiles(pendingFileRecoverablesForCurrentCheckpoint, lastInProgressFileRecoverable);
+		pendingFileRecoverablesForCurrentCheckpoint = new ArrayList<>();
+
+		collector.collect(committableFiles);
 	}
 
 	// --------------------------- Testing Methods -----------------------------

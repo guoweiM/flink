@@ -5,8 +5,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.dag.TransformationApply;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
-import org.apache.flink.runtime.jobgraph.OperatorID;
-import org.apache.flink.streaming.api.operators.*;
+import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
+import org.apache.flink.streaming.api.operators.StreamMap;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 
 /**

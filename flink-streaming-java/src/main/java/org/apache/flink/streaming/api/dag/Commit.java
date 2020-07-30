@@ -27,7 +27,7 @@ public class Commit<CommitT> extends TransformationApply<Transformation<CommitT>
 
 		CommitTransformation<CommitT> commitTransformation = new CommitTransformation<>(
 				input,
-				cleanedCommitFunction);
+				cleanedCommitFunction, 10);
 
 		return commitTransformation;
 	}
