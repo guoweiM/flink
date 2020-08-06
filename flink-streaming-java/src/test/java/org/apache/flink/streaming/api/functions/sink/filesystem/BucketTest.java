@@ -366,7 +366,8 @@ public class BucketTest {
 				initialPartCounter,
 				new RowWiseBucketWriter<>(writer, ENCODER),
 				rollingPolicy,
-				outputFileConfig);
+				outputFileConfig,
+			null);
 	}
 
 	private static Bucket<String, String> restoreBucket(
@@ -382,7 +383,8 @@ public class BucketTest {
 				new RowWiseBucketWriter<>(writer, ENCODER),
 				rollingPolicy,
 				bucketState,
-				outputFileConfig);
+				outputFileConfig,
+			null);
 	}
 
 	private static TestRecoverableWriter getRecoverableWriter(Path path) {
@@ -413,7 +415,8 @@ public class BucketTest {
 			new RowWiseBucketWriter<>(writer, ENCODER),
 			rollingPolicy,
 			stateWithOnlyInProgressFile,
-			OutputFileConfig.builder().build());
+			OutputFileConfig.builder().build(),
+			null);
 	}
 
 	private Bucket<String, String> getRestoredBucketWithOnlyPendingParts(final BaseStubWriter writer, final int numberOfPendingParts) throws IOException {
@@ -432,7 +435,7 @@ public class BucketTest {
 			1L,
 			new RowWiseBucketWriter<>(writer, ENCODER),
 			rollingPolicy,
-			initStateWithOnlyInProgressFile, OutputFileConfig.builder().build());
+			initStateWithOnlyInProgressFile, OutputFileConfig.builder().build(), null);
 	}
 
 	private Map<Long, List<InProgressFileWriter.PendingFileRecoverable>> createPendingPartsPerCheckpoint(int noOfCheckpoints) {

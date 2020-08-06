@@ -24,7 +24,8 @@ import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerialization;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkSplit;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc4.FileSplit;
+import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -33,10 +34,8 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -81,6 +80,9 @@ public class Buckets<IN, BucketID> {
 	@Nullable
 	private BucketLifeCycleListener<IN, BucketID> bucketLifeCycleListener;
 
+	@Nullable
+	private final Collector<FileSplit> splitCollector; // this for the new unified api
+
 	// --------------------------- State Related Fields -----------------------------
 
 	private final BucketStateSerializer<BucketID> bucketStateSerializer;
@@ -101,7 +103,8 @@ public class Buckets<IN, BucketID> {
 			final BucketWriter<IN, BucketID> bucketWriter,
 			final RollingPolicy<IN, BucketID> rollingPolicy,
 			final int subtaskIndex,
-			final OutputFileConfig outputFileConfig) {
+			final OutputFileConfig outputFileConfig,
+			@Nullable final Collector<FileSplit> splitCollector) {
 
 		this.basePath = Preconditions.checkNotNull(basePath);
 		this.bucketAssigner = Preconditions.checkNotNull(bucketAssigner);
@@ -111,6 +114,8 @@ public class Buckets<IN, BucketID> {
 		this.subtaskIndex = subtaskIndex;
 
 		this.outputFileConfig = Preconditions.checkNotNull(outputFileConfig);
+
+		this.splitCollector = splitCollector;
 
 		this.activeBuckets = new HashMap<>();
 		this.bucketerContext = new Buckets.BucketerContext();
@@ -182,7 +187,8 @@ public class Buckets<IN, BucketID> {
 						bucketWriter,
 						rollingPolicy,
 						recoveredState,
-						outputFileConfig
+						outputFileConfig,
+						splitCollector
 				);
 
 		updateActiveBucketId(bucketId, restoredBucket);
@@ -303,7 +309,9 @@ public class Buckets<IN, BucketID> {
 					maxPartCounter,
 					bucketWriter,
 					rollingPolicy,
-					outputFileConfig);
+					outputFileConfig,
+					splitCollector
+				);
 			activeBuckets.put(bucketId, bucket);
 			notifyBucketCreate(bucket);
 		}
@@ -387,52 +395,7 @@ public class Buckets<IN, BucketID> {
 
 	// --------------------------- method for the new sink api -----------------
 
-	public List<FileSinkSplit> preCommit() throws IOException {
-		final Iterator<Map.Entry<BucketID, Bucket<IN, BucketID>>> activeBucketIt =
-			activeBuckets.entrySet().iterator();
-
-		final List<FileSinkSplit> fileSinkSplits = new ArrayList<>();
-
-		while (activeBucketIt.hasNext()) {
-			final Bucket<IN, BucketID> bucket = activeBucketIt.next().getValue();
-			final FileSinkSplit fileSinkSplit = bucket.preCommit();
-
-			fileSinkSplits.add(fileSinkSplit);
-			if (!bucket.isActive()) {
-				// We've dealt with all the pending files and the writer for this bucket is not currently open.
-				// Therefore this bucket is currently inactive and we can remove it from our state.
-				activeBucketIt.remove();
-				//TODO:: maybe need to set the state to the fileSinkSplit.
-				//notifyBucketInactive(bucket);
-			}
-		}
-		return fileSinkSplits;
-	}
-
-	public void persist(
-		final ListState<byte[]> bucketStatesContainer,
-		final ListState<Long> partCounterStateContainer) throws Exception {
-
-		Preconditions.checkState(
-			bucketWriter != null && bucketStateSerializer != null,
-			"sink has not been initialized");
-
-		bucketStatesContainer.clear();
-		partCounterStateContainer.clear();
-
-		partCounterStateContainer.add(maxPartCounter);
-
-		for (Bucket<IN, BucketID> bucket : activeBuckets.values()) {
-			final BucketState bucketState = bucket.persist();
-
-			final byte[] serializedBucketState = SimpleVersionedSerialization
-				.writeVersionAndSerialize(bucketStateSerializer, bucketState);
-
-			bucketStatesContainer.add(serializedBucketState);
-		}
-	}
-
-	public void flush() {
+	public void flush() throws IOException {
 		for (Bucket<IN, BucketID> bucket : activeBuckets.values()) {
 			bucket.flush();
 		}

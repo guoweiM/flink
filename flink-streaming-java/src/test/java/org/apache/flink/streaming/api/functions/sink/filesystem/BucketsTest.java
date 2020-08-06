@@ -325,7 +325,8 @@ public class BucketsTest {
 				new RowWiseBucketWriter<>(FileSystem.get(path.toUri()).createRecoverableWriter(), new SimpleStringEncoder<>()),
 				DefaultRollingPolicy.builder().build(),
 				2,
-				OutputFileConfig.builder().build()
+				OutputFileConfig.builder().build(),
+			null
 		);
 
 		buckets.onElement(
@@ -503,7 +504,9 @@ public class BucketsTest {
 				new RowWiseBucketWriter<>(FileSystem.get(basePath.toUri()).createRecoverableWriter(), new SimpleStringEncoder<>()),
 				rollingPolicy,
 				subtaskIdx,
-				outputFileConfig);
+				outputFileConfig,
+			null
+			);
 
 		if (bucketLifeCycleListener != null) {
 			buckets.setBucketLifeCycleListener(bucketLifeCycleListener);

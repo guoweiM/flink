@@ -23,8 +23,10 @@ import org.apache.flink.formats.hadoop.bulk.DefaultHadoopFileCommitterFactory;
 import org.apache.flink.formats.hadoop.bulk.HadoopFileCommitterFactory;
 import org.apache.flink.formats.hadoop.bulk.HadoopPathBasedBulkWriter;
 import org.apache.flink.formats.hadoop.bulk.HadoopPathBasedPartFileWriter;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc4.FileSplit;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.CheckpointRollingPolicy;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
+import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.hadoop.conf.Configuration;
@@ -118,7 +120,7 @@ public class HadoopPathBasedBulkFormatBuilder<IN, BucketID, T extends HadoopPath
 	}
 
 	@Override
-	public Buckets<IN, BucketID> createBuckets(int subtaskIndex) throws IOException {
+	public Buckets<IN, BucketID> createBuckets(int subtaskIndex, Collector<FileSplit> collector) throws IOException {
 		return new Buckets<>(
 			basePath,
 			bucketAssigner,
@@ -129,6 +131,7 @@ public class HadoopPathBasedBulkFormatBuilder<IN, BucketID, T extends HadoopPath
 				fileCommitterFactory),
 			rollingPolicy,
 			subtaskIndex,
-			outputFileConfig);
+			outputFileConfig,
+			collector);
 	}
 }

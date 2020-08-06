@@ -318,7 +318,8 @@ public class BucketStateSerializerTest {
 			0,
 			createBucketWriter(),
 			DefaultRollingPolicy.builder().withMaxPartSize(10).build(),
-			OutputFileConfig.builder().build());
+			OutputFileConfig.builder().build(),
+			null);
 	}
 
 	private static Bucket<String, String> restoreBucket(final int initialPartCounter, final BucketState<String> bucketState) throws IOException {
@@ -328,7 +329,8 @@ public class BucketStateSerializerTest {
 			createBucketWriter(),
 			DefaultRollingPolicy.builder().withMaxPartSize(10).build(),
 			bucketState,
-			OutputFileConfig.builder().build());
+			OutputFileConfig.builder().build(),
+			null);
 	}
 
 	private static RowWiseBucketWriter<String, String> createBucketWriter() throws IOException {

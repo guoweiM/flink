@@ -16,53 +16,36 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.functions.sink.filesystem.poc3;
+package org.apache.flink.streaming.api.functions.sink.filesystem.poc4;
 
 import org.apache.flink.streaming.api.functions.sink.filesystem.InProgressFileWriter;
 
 import java.io.Serializable;
-import java.util.List;
 
 /**
  * TODO java doc.
  */
-public class FileSinkSplit implements Serializable {
+public class FileSplit implements Serializable {
 
-	public static FileSinkSplit DUMMY = new FileSinkSplit();
+	/** this represents the data that could be committed. */
+	private final InProgressFileWriter.PendingFileRecoverable pendingFileRecoverable;
 
-	/** this represents the data that could be committed when the checkpoint completes. */
-	private final List<InProgressFileWriter.PendingFileRecoverable> pendingFileRecoverables;
-
-	/** this represents the data that could be cleanup when the checkpoint completes. */
+	/** this represents the resource that could be cleanup when the data committed. */
 	private final InProgressFileWriter.InProgressFileRecoverable inProgressFileRecoverable;
 
-	/** for poc only */
-	private final boolean isDummy;
-
-	public FileSinkSplit(
-		List<InProgressFileWriter.PendingFileRecoverable> pendingFileRecoverables,
+	public FileSplit(
+		InProgressFileWriter.PendingFileRecoverable pendingFileRecoverable,
 		InProgressFileWriter.InProgressFileRecoverable inProgressFileRecoverables) {
 
-		this.pendingFileRecoverables = pendingFileRecoverables;
+		this.pendingFileRecoverable = pendingFileRecoverable;
 		this.inProgressFileRecoverable = inProgressFileRecoverables;
-		this.isDummy = false;
 	}
 
-	public FileSinkSplit() {
-		this.isDummy = true;
-		this.pendingFileRecoverables = null;
-		this.inProgressFileRecoverable = null;
-	}
-
-	public List<InProgressFileWriter.PendingFileRecoverable> getPendingFileRecoverables() {
-		return pendingFileRecoverables;
+	public InProgressFileWriter.PendingFileRecoverable getPendingFileRecoverable() {
+		return pendingFileRecoverable;
 	}
 
 	public InProgressFileWriter.InProgressFileRecoverable getInProgressFileRecoverable() {
 		return inProgressFileRecoverable;
-	}
-
-	public boolean isDummy() {
-		return isDummy;
 	}
 }

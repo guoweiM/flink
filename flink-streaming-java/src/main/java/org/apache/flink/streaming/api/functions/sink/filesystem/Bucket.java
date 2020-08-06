@@ -21,8 +21,9 @@ package org.apache.flink.streaming.api.functions.sink.filesystem;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc4.FileSplit;
+import org.apache.flink.util.Collector;
 
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkSplit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,11 +78,11 @@ public class Bucket<IN, BucketID> {
 	//---------------------------- begin for the new sink api ----------------------------
 
 	// This field represents the data needed to be cleanup. This field is only updated at the writer persisting happens.
-	// It would be return to the SinkSplit.
 	@Nullable
 	private InProgressFileWriter.InProgressFileRecoverable lastInProgressFileRecoverable = null;
 
-	private boolean isTerminated = false;
+	@Nullable
+	private Collector<FileSplit> splitCollector;
 
 	//---------------------------- end for the new sink api ------------------------------
 
@@ -95,7 +96,8 @@ public class Bucket<IN, BucketID> {
 			final long initialPartCounter,
 			final BucketWriter<IN, BucketID> bucketWriter,
 			final RollingPolicy<IN, BucketID> rollingPolicy,
-			final OutputFileConfig outputFileConfig) {
+			final OutputFileConfig outputFileConfig,
+			@Nullable final Collector<FileSplit> collector) {
 		this.subtaskIndex = subtaskIndex;
 		this.bucketId = checkNotNull(bucketId);
 		this.bucketPath = checkNotNull(bucketPath);
@@ -108,6 +110,8 @@ public class Bucket<IN, BucketID> {
 		this.inProgressFileRecoverablesPerCheckpoint = new TreeMap<>();
 
 		this.outputFileConfig = checkNotNull(outputFileConfig);
+
+		this.splitCollector = collector;
 	}
 
 	/**
@@ -119,7 +123,8 @@ public class Bucket<IN, BucketID> {
 			final BucketWriter<IN, BucketID> partFileFactory,
 			final RollingPolicy<IN, BucketID> rollingPolicy,
 			final BucketState<BucketID> bucketState,
-			final OutputFileConfig outputFileConfig) throws IOException {
+			final OutputFileConfig outputFileConfig,
+			@Nullable final Collector<FileSplit> collector) throws IOException {
 
 		this(
 				subtaskIndex,
@@ -128,7 +133,8 @@ public class Bucket<IN, BucketID> {
 				initialPartCounter,
 				partFileFactory,
 				rollingPolicy,
-				outputFileConfig);
+				outputFileConfig,
+			collector);
 
 		restoreInProgressFile(bucketState);
 		commitRecoveredPendingFiles(bucketState);
@@ -236,8 +242,14 @@ public class Bucket<IN, BucketID> {
 		InProgressFileWriter.PendingFileRecoverable pendingFileRecoverable = null;
 		if (inProgressPart != null) {
 			pendingFileRecoverable = inProgressPart.closeForCommit();
-			pendingFileRecoverablesForCurrentCheckpoint.add(pendingFileRecoverable);
 			inProgressPart = null;
+
+			if (splitCollector != null) {
+				// The committer operator is responsible for the clean up.
+				splitCollector.collect(new FileSplit(pendingFileRecoverable, lastInProgressFileRecoverable));
+			} else {
+				pendingFileRecoverablesForCurrentCheckpoint.add(pendingFileRecoverable);
+			}
 		}
 		return pendingFileRecoverable;
 	}
@@ -251,16 +263,19 @@ public class Bucket<IN, BucketID> {
 	BucketState<BucketID> onReceptionOfCheckpoint(long checkpointId) throws IOException {
 		prepareBucketForCheckpointing(checkpointId);
 
-		InProgressFileWriter.InProgressFileRecoverable inProgressFileRecoverable = null;
 		long inProgressFileCreationTime = Long.MAX_VALUE;
 
+		lastInProgressFileRecoverable = null;
+
 		if (inProgressPart != null) {
-			inProgressFileRecoverable = inProgressPart.persist();
+			lastInProgressFileRecoverable = inProgressPart.persist();
 			inProgressFileCreationTime = inProgressPart.getCreationTime();
-			this.inProgressFileRecoverablesPerCheckpoint.put(checkpointId, inProgressFileRecoverable);
+			if (splitCollector == null) {
+				this.inProgressFileRecoverablesPerCheckpoint.put(checkpointId, lastInProgressFileRecoverable);
+			}
 		}
 
-		return new BucketState<>(bucketId, bucketPath, inProgressFileCreationTime, inProgressFileRecoverable, pendingFileRecoverablesPerCheckpoint);
+		return new BucketState<>(bucketId, bucketPath, inProgressFileCreationTime, lastInProgressFileRecoverable, pendingFileRecoverablesPerCheckpoint);
 	}
 
 	private void prepareBucketForCheckpointing(long checkpointId) throws IOException {
@@ -278,7 +293,6 @@ public class Bucket<IN, BucketID> {
 	}
 
 	void onSuccessfulCompletionOfCheckpoint(long checkpointId) throws IOException {
-
 		checkNotNull(bucketWriter);
 
 		Iterator<Map.Entry<Long, List<InProgressFileWriter.PendingFileRecoverable>>> it =
@@ -330,33 +344,9 @@ public class Bucket<IN, BucketID> {
 
 	// ---------------------------------- method for the new sink api -------------------------------------------
 
-	public FileSinkSplit preCommit() throws IOException {
-		if (inProgressPart != null && (rollingPolicy.shouldRollOnCheckpoint(inProgressPart) || isTerminated)) {
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("Subtask {} closing in-progress part file for bucket id={} on checkpoint.", subtaskIndex, bucketId);
-			}
-			closePartFile();
-		}
-		final FileSinkSplit fileSinkSplit = new FileSinkSplit(pendingFileRecoverablesForCurrentCheckpoint, lastInProgressFileRecoverable);
-		pendingFileRecoverablesForCurrentCheckpoint = new ArrayList<>();
-		return fileSinkSplit;
-	}
-
-	public BucketState<BucketID> persist() throws IOException {
-
-		lastInProgressFileRecoverable = null;
-		long inProgressFileCreationTime = Long.MAX_VALUE;
-
-		if (inProgressPart != null) {
-			lastInProgressFileRecoverable = inProgressPart.persist();
-			inProgressFileCreationTime = inProgressPart.getCreationTime();
-		}
-
-		return new BucketState<>(bucketId, bucketPath, inProgressFileCreationTime, lastInProgressFileRecoverable, pendingFileRecoverablesPerCheckpoint);
-	}
-
-	public void flush() {
-		isTerminated = true;
+	void flush() throws IOException {
+		// send all the pending file to committer.
+		closePartFile();
 	}
 
 	// --------------------------- Testing Methods -----------------------------
@@ -398,8 +388,9 @@ public class Bucket<IN, BucketID> {
 			final long initialPartCounter,
 			final BucketWriter<IN, BucketID> bucketWriter,
 			final RollingPolicy<IN, BucketID> rollingPolicy,
-			final OutputFileConfig outputFileConfig) {
-		return new Bucket<>(subtaskIndex, bucketId, bucketPath, initialPartCounter, bucketWriter, rollingPolicy, outputFileConfig);
+			final OutputFileConfig outputFileConfig,
+			final Collector<FileSplit> collector) {
+		return new Bucket<>(subtaskIndex, bucketId, bucketPath, initialPartCounter, bucketWriter, rollingPolicy, outputFileConfig, collector);
 	}
 
 	/**
@@ -419,7 +410,8 @@ public class Bucket<IN, BucketID> {
 			final BucketWriter<IN, BucketID> bucketWriter,
 			final RollingPolicy<IN, BucketID> rollingPolicy,
 			final BucketState<BucketID> bucketState,
-			final OutputFileConfig outputFileConfig) throws IOException {
-		return new Bucket<>(subtaskIndex, initialPartCounter, bucketWriter, rollingPolicy, bucketState, outputFileConfig);
+			final OutputFileConfig outputFileConfig,
+			final Collector<FileSplit> collector) throws IOException {
+		return new Bucket<>(subtaskIndex, initialPartCounter, bucketWriter, rollingPolicy, bucketState, outputFileConfig, collector);
 	}
 }

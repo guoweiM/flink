@@ -20,6 +20,10 @@ package org.apache.flink.streaming.api.functions.sink.filesystem;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc4.FileSplit;
+import org.apache.flink.util.Collector;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 
@@ -33,13 +37,14 @@ class DefaultBucketFactoryImpl<IN, BucketID> implements BucketFactory<IN, Bucket
 
 	@Override
 	public Bucket<IN, BucketID> getNewBucket(
-			final int subtaskIndex,
-			final BucketID bucketId,
-			final Path bucketPath,
-			final long initialPartCounter,
-			final BucketWriter<IN, BucketID> bucketWriter,
-			final RollingPolicy<IN, BucketID> rollingPolicy,
-			final OutputFileConfig outputFileConfig) {
+		final int subtaskIndex,
+		final BucketID bucketId,
+		final Path bucketPath,
+		final long initialPartCounter,
+		final BucketWriter<IN, BucketID> bucketWriter,
+		final RollingPolicy<IN, BucketID> rollingPolicy,
+		final OutputFileConfig outputFileConfig,
+		@Nullable final Collector<FileSplit> collector) {
 
 		return Bucket.getNew(
 				subtaskIndex,
@@ -48,7 +53,8 @@ class DefaultBucketFactoryImpl<IN, BucketID> implements BucketFactory<IN, Bucket
 				initialPartCounter,
 				bucketWriter,
 				rollingPolicy,
-				outputFileConfig);
+				outputFileConfig,
+			collector);
 	}
 
 	@Override
@@ -58,7 +64,8 @@ class DefaultBucketFactoryImpl<IN, BucketID> implements BucketFactory<IN, Bucket
 			final BucketWriter<IN, BucketID> bucketWriter,
 			final RollingPolicy<IN, BucketID> rollingPolicy,
 			final BucketState<BucketID> bucketState,
-			final OutputFileConfig outputFileConfig) throws IOException {
+			final OutputFileConfig outputFileConfig,
+			@Nullable final Collector<FileSplit> collector) throws IOException {
 
 		return Bucket.restore(
 				subtaskIndex,
@@ -66,6 +73,7 @@ class DefaultBucketFactoryImpl<IN, BucketID> implements BucketFactory<IN, Bucket
 				bucketWriter,
 				rollingPolicy,
 				bucketState,
-				outputFileConfig);
+				outputFileConfig,
+				collector);
 	}
 }

@@ -78,7 +78,7 @@ public class StreamingFileWriter extends AbstractStreamOperator<CommitMessage>
 	@Override
 	public void initializeState(StateInitializationContext context) throws Exception {
 		super.initializeState(context);
-		buckets = bucketsBuilder.createBuckets(getRuntimeContext().getIndexOfThisSubtask());
+		buckets = bucketsBuilder.createBuckets(getRuntimeContext().getIndexOfThisSubtask(), null);
 		helper = new StreamingFileSinkHelper<>(
 				buckets,
 				context.isRestored(),

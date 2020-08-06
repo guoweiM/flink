@@ -205,7 +205,8 @@ public class RollingPolicyTest {
 				new RowWiseBucketWriter<>(FileSystem.get(basePath.toUri()).createRecoverableWriter(), new SimpleStringEncoder<>()),
 				rollingPolicyToTest,
 				0,
-				OutputFileConfig.builder().build()
+				OutputFileConfig.builder().build(),
+			null
 		);
 	}
 

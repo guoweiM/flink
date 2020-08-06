@@ -35,14 +35,17 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.filesystem.BucketAssigner;
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc4.FileSink;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkBuilder;
 import org.apache.flink.util.Collector;
 
 import java.io.PrintStream;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Java doc.
+ */
 public class WordCount {
 
 	// *************************************************************************
@@ -56,18 +59,18 @@ public class WordCount {
 		env.enableCheckpointing(5000L);
 		env.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, Time.of(10L, TimeUnit.SECONDS)));
 
-		final FileSinkBuilder<Tuple2<Integer, Integer>> sink = StreamingFileSink
+		final FileSink<Tuple2<Integer, Integer>, String> sink = StreamingFileSink
 			.forRowFormat(new Path("/tmp/test3"), (Encoder<Tuple2<Integer, Integer>>) (element, stream) -> {
 				PrintStream out = new PrintStream(stream);
 				out.println(element.f1);
 			})
 			.withBucketAssigner(new KeyBucketAssigner())
 			.withRollingPolicy(OnCheckpointRollingPolicy.build())
-			.buildFileSinkTopology();
+			.buildFileSink();
 
 		env.addSource(new Generator(10, 1, 10))
 			.keyBy(0)
-			.sink(sink);
+			.addSplitSink(sink);
 
 		env.execute("StreamingFileSinkProgram");
 	}
@@ -141,6 +144,7 @@ public class WordCount {
 			this.recordsToEmit = ((durationSeconds * 10) / idlenessMs) * numKeys;
 		}
 
+		@SuppressWarnings("checkstyle:SimplifyBooleanExpression")
 		@Override
 		public void run(final SourceContext<Tuple2<Integer, Integer>> ctx) throws Exception {
 			while (numRecordsEmitted < recordsToEmit) {
@@ -153,13 +157,16 @@ public class WordCount {
 				Thread.sleep(idlenessMs);
 			}
 
-			while (!canceled && checkpointFinish == false) {
-				Thread.sleep(50);
+			while (true) {
+				if (canceled || checkpointFinish != false) {
+					break;
+				}
+				Thread.sleep(500);
 			}
 
 			while (true) {
 				// wait for commit the file
-				Thread.sleep(idlenessMs * 1000) ;
+				Thread.sleep(idlenessMs * 1000);
 
 				synchronized (ctx.getCheckpointLock()) {
 					for (int i = 0; i < numKeys; i++) {

@@ -58,7 +58,8 @@ public class BucketAssignerITCases {
 			new RowWiseBucketWriter<>(FileSystem.get(basePath.toUri()).createRecoverableWriter(), new SimpleStringEncoder<>()),
 			rollingPolicy,
 			0,
-			OutputFileConfig.builder().build()
+			OutputFileConfig.builder().build(),
+			null
 		);
 
 		Bucket<String, String> bucket =

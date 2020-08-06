@@ -32,11 +32,13 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.DateTimeBucketAssigner;
-import org.apache.flink.streaming.api.functions.sink.filesystem.poc3.FileSinkBuilder;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc4.FileSplit;
+import org.apache.flink.streaming.api.functions.sink.filesystem.poc4.FileSink;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.CheckpointRollingPolicy;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.OnCheckpointRollingPolicy;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
+import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
 
 import java.io.IOException;
@@ -165,7 +167,7 @@ public class StreamingFileSink<IN>
 		}
 
 		@Internal
-		public abstract Buckets<IN, BucketID> createBuckets(final int subtaskIndex) throws IOException;
+		public abstract Buckets<IN, BucketID> createBuckets(final int subtaskIndex, final Collector<FileSplit> collector) throws IOException;
 	}
 
 	/**
@@ -240,15 +242,9 @@ public class StreamingFileSink<IN>
 			return new RowFormatBuilder(basePath, encoder, Preconditions.checkNotNull(assigner), Preconditions.checkNotNull(policy), bucketCheckInterval, new DefaultBucketFactoryImpl<>(), outputFileConfig);
 		}
 
-		public FileSinkBuilder<IN> buildFileSinkTopology() {
-			try {
-				return new FileSinkBuilder<>(this, basePath, encoder);
-			} catch (Exception e) {
-				e.printStackTrace();
-				throw new RuntimeException("fail build");
-			}
+		public FileSink<IN, BucketID> buildFileSink() {
+			return new FileSink<>(this, bucketCheckInterval, basePath, encoder);
 		}
-
 
 		/** Creates the actual sink. */
 		public StreamingFileSink<IN> build() {
@@ -263,7 +259,7 @@ public class StreamingFileSink<IN>
 
 		@Internal
 		@Override
-		public Buckets<IN, BucketID> createBuckets(int subtaskIndex) throws IOException {
+		public Buckets<IN, BucketID> createBuckets(int subtaskIndex, Collector<FileSplit> collector) throws IOException {
 			return new Buckets<>(
 					basePath,
 					bucketAssigner,
@@ -271,7 +267,8 @@ public class StreamingFileSink<IN>
 					new RowWiseBucketWriter<>(FileSystem.get(basePath.toUri()).createRecoverableWriter(), encoder),
 					rollingPolicy,
 					subtaskIndex,
-					outputFileConfig);
+					outputFileConfig,
+				collector);
 		}
 	}
 
@@ -374,7 +371,7 @@ public class StreamingFileSink<IN>
 
 		@Internal
 		@Override
-		public Buckets<IN, BucketID> createBuckets(int subtaskIndex) throws IOException {
+		public Buckets<IN, BucketID> createBuckets(int subtaskIndex, Collector<FileSplit> collector) throws IOException {
 			return new Buckets<>(
 					basePath,
 					bucketAssigner,
@@ -382,7 +379,8 @@ public class StreamingFileSink<IN>
 					new BulkBucketWriter<>(FileSystem.get(basePath.toUri()).createRecoverableWriter(), writerFactory),
 					rollingPolicy,
 					subtaskIndex,
-					outputFileConfig);
+					outputFileConfig,
+				collector);
 		}
 	}
 
@@ -404,7 +402,7 @@ public class StreamingFileSink<IN>
 	@Override
 	public void initializeState(FunctionInitializationContext context) throws Exception {
 		this.helper = new StreamingFileSinkHelper<>(
-				bucketsBuilder.createBuckets(getRuntimeContext().getIndexOfThisSubtask()),
+				bucketsBuilder.createBuckets(getRuntimeContext().getIndexOfThisSubtask(), null),
 				context.isRestored(),
 				context.getOperatorStateStore(),
 				((StreamingRuntimeContext) getRuntimeContext()).getProcessingTimeService(),

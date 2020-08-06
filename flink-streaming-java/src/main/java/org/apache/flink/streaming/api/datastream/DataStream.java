@@ -40,6 +40,8 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.connector.sink.SplitSink;
+import org.apache.flink.api.dag.CommitTransformation;
 import org.apache.flink.api.dag.Sink;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.dag.TransformationApply;
@@ -71,6 +73,7 @@ import org.apache.flink.streaming.api.operators.StreamFlatMap;
 import org.apache.flink.streaming.api.operators.StreamMap;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamSink;
+import org.apache.flink.streaming.api.operators.sink.SplitSinkOperatorFactory;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.api.transformations.UnionTransformation;
@@ -100,6 +103,7 @@ import org.apache.flink.streaming.runtime.partitioner.ShufflePartitioner;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
 import org.apache.flink.streaming.util.keys.KeySelectorUtil;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.function.SplitSinkCommitFunction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -1289,6 +1293,39 @@ public class DataStream<T> {
 
 		// we need to come up with a better way of recording the transformations
 		getExecutionEnvironment().addOperator(finalTransformation);
+	}
+
+	//TODO:: we should return a transform for set the properties of the operator.
+	public <SplitT> void addSplitSink(SplitSink<T, SplitT> splitSink) {
+
+		final TypeInformation<SplitT> splitTypeInformation = TypeExtractor.getUnaryOperatorReturnType(
+			clean(splitSink),
+			SplitSink.class,
+			0,
+			1,
+			TypeExtractor.NO_INDEX,
+			getType(),
+			Utils.getCallLocationName(),
+			true);
+
+		// Maybe we could look following as building a special sink topology.
+		// The same would also happened to the Table & Sql.
+		// So maybe we could organize following code to an TransformationApply and
+		// the TransformationApply could be reused for Table/Sql SDK.
+		final OneInputTransformation sinkWriterTransformation =
+			new OneInputTransformation(
+				getTransformation(),
+				"Split Sink Writer",
+				new SplitSinkOperatorFactory(splitSink),
+				splitTypeInformation,
+				environment.getParallelism());
+
+		final CommitTransformation commitTransformation =
+			new CommitTransformation(sinkWriterTransformation, new SplitSinkCommitFunction(splitSink));
+
+		getExecutionEnvironment().addOperator(commitTransformation);
+
+		// TODO: return sinkWriterTransformation
 	}
 
 	/**
