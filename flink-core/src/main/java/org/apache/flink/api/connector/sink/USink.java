@@ -41,7 +41,7 @@ public interface USink<T, CommittableT> extends Function, Serializable {
 
 	CommitFunction<CommittableT> createCommitFunction();
 
-	//TODO:: create the SplitT serializer.
+	//TODO:: create the CommittableT serializer.
 
 	/**
 	 * Java Doc.
