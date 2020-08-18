@@ -151,8 +151,8 @@ public class SinkWriterOperator<IN, CommittableT> extends AbstractStreamOperator
 		}
 
 		@Override
-		public void collect(CommittableT split) {
-			output.collect(streamRecord.replace(split));
+		public void collect(CommittableT committable) {
+			output.collect(streamRecord.replace(committable));
 		}
 
 		@Override
