@@ -20,7 +20,7 @@ package org.apache.flink.streaming.api.operators.sink;
 
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.api.connector.sink.CommitListener;
+import org.apache.flink.api.connector.sink.CleanUpUnmanagedCommittable;
 import org.apache.flink.api.connector.sink.USink;
 import org.apache.flink.api.connector.sink.Writer;
 import org.apache.flink.runtime.state.StateInitializationContext;
@@ -131,9 +131,9 @@ public class SinkWriterOperator<IN, CommittableT> extends AbstractStreamOperator
 	public void notifyCheckpointComplete(long checkpointId) throws Exception {
 		super.notifyCheckpointComplete(checkpointId);
 		if (!allManagedCommittablesHasDone) {
-			if (writer instanceof CommitListener) {
-				final CommitListener commitListener = (CommitListener) writer;
-				commitListener.commitsFinished(new AbstractID());
+			if (writer instanceof CleanUpUnmanagedCommittable) {
+				final CleanUpUnmanagedCommittable cleanUpUnmangedCommittable = (CleanUpUnmanagedCommittable) writer;
+				cleanUpUnmangedCommittable.cleanUp(new AbstractID());
 				allManagedCommittablesHasDone = true;
 			}
 		}
