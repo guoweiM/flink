@@ -133,7 +133,7 @@ public class SinkWriterOperator<IN, CommittableT> extends AbstractStreamOperator
 		if (!allManagedCommittablesHasDone) {
 			if (writer instanceof CleanUpUnmanagedCommittable) {
 				final CleanUpUnmanagedCommittable cleanUpUnmangedCommittable = (CleanUpUnmanagedCommittable) writer;
-				cleanUpUnmangedCommittable.cleanUp(new AbstractID());
+				cleanUpUnmangedCommittable.cleanUp();
 				allManagedCommittablesHasDone = true;
 			}
 		}
