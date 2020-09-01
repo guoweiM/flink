@@ -21,8 +21,10 @@ package org.apache.flink.api.connector.sink;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.functions.CommitFunction;
 import org.apache.flink.api.common.functions.Function;
+import org.apache.flink.api.common.state.BroadcastState;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.util.AbstractID;
 
 import java.io.Serializable;
@@ -52,10 +54,14 @@ public interface USink<T, CommittableT> extends Function, Serializable {
 
 		int getSubtaskIndex();
 
+		int getParallelism();
+
 		//TODO :: key or non-key does the sink developer knows? TBV
 		<S> ListState<S> getListState(ListStateDescriptor<S> stateDescriptor) throws Exception;
 
 		<S> ListState<S> getUnionListState(ListStateDescriptor<S> stateDescriptor) throws Exception;
+
+		<K, V> BroadcastState<K, V> getBroadcastState(MapStateDescriptor<K, V> stateDescriptor) throws Exception;
 
 		// TODO we could use the session id to clean up the un-managed CommittableT.
 		//  The session id looks like (JobId-JobAttemptId-TaskId-TaskAttemptId)
