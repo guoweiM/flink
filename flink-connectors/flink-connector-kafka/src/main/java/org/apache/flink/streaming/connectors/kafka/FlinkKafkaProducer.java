@@ -1382,6 +1382,19 @@ public class FlinkKafkaProducer<IN>
 			return producer;
 		}
 
+		@Nullable
+		public String getTransactionalId() {
+			return transactionalId;
+		}
+
+		public long getProducerId() {
+			return producerId;
+		}
+
+		public short getEpoch() {
+			return epoch;
+		}
+
 		@Override
 		public String toString() {
 			return String.format(
