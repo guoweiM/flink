@@ -27,19 +27,19 @@ class KafkaCommitter implements CommitFunction<FlinkKafkaProducer.KafkaTransacti
 	@Override
 	public void commit(FlinkKafkaProducer.KafkaTransactionState commit) {
 
-		LOG.info("1. ....... ..... ........ commit: " + commit);
 
 		final Properties p = new Properties();
 		p.putAll(properties);
+		if (commit.getTransactionalId().equals("873cc765-68ed-4184-b378-4698e128ccd3")) {
+			return;
+		}
 		p.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, commit.getTransactionalId());
 
 		final FlinkKafkaInternalProducer<byte[], byte[]> flinkKafkaInternalProducer = new FlinkKafkaInternalProducer<>(p);
 
 		flinkKafkaInternalProducer.resumeTransaction(commit.getProducerId(), commit.getEpoch());
-		LOG.info("2. ....... ..... ........ commit: " + commit);
 
 		flinkKafkaInternalProducer.commitTransaction();
-		LOG.info("2. ....... ..... ........ commit: " + commit);
 
 		flinkKafkaInternalProducer.close(Duration.ofSeconds(5));
 	}

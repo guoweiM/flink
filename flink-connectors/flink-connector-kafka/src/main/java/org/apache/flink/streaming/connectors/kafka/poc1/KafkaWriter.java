@@ -42,63 +42,37 @@ class KafkaWriter<T> implements Writer<T, FlinkKafkaProducer.KafkaTransactionSta
 		this.attemptId = initialContext.getSubtaskIndex() + "-" + initialContext.getSessionId();
 		this.producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
 		this.producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-		this.producerConfig.put("isolation.level", "read_committed");
 
 		this.count = 0;
 		this.kafkaTransactionState = create();
 
-		this.producer = create2();
 	}
 
 	@Override
 	public void write(T t, Context context, Collector<FlinkKafkaProducer.KafkaTransactionState> collector) throws Exception {
 		ProducerRecord<byte[], byte[]> record = kafkaSchema.serialize(t, System.currentTimeMillis());
-//		kafkaTransactionState.getProducer().send(record);
+		kafkaTransactionState.getProducer().send(record);
 
-		producer.send(record);
+		kafkaTransactionState.setNum(kafkaTransactionState.getNum() + 1);
 	}
 
 	@Override
 	public void persistent(Collector<FlinkKafkaProducer.KafkaTransactionState> output) throws Exception {
 
-		producer.flush();
-		long producerId = producer.getProducerId();
-		short epoch = producer.getEpoch();
-		producer.close(Duration.ofSeconds(0));
+
+		if (kafkaTransactionState.getNum() == 0) {
+			kafkaTransactionState.getProducer().abortTransaction();
+		} else {
+			kafkaTransactionState.getProducer().flush();
+			kafkaTransactionState.getProducer().close(Duration.ofSeconds(0));
 
 
-		FlinkKafkaInternalProducer<String, String> resumeProducer = new FlinkKafkaInternalProducer<>(producerConfig);
-		LOG.info("-||||||||||||||||||||---------------------------------------");
-		try {
-			resumeProducer.resumeTransaction(producerId, epoch);
-			resumeProducer.commitTransaction();
-		} finally {
-			resumeProducer.close(Duration.ofSeconds(5));
+			output.collect(kafkaTransactionState);
 		}
 
+		LOG.info("YY. ....... ..... ........ send: " + kafkaTransactionState.getNum());
 
-		producer = create2();
-
-
-//		kafkaTransactionState.getProducer().flush();
-//		kafkaTransactionState.getProducer().close(Duration.ofSeconds(0));
-//		LOG.info(
-//			kafkaTransactionState.getTransactionalId() + ":::" +
-//				kafkaTransactionState.getProducer().getProducerId() + ":::" +
-//				kafkaTransactionState.getProducer().getEpoch());
-//		//output.collect(kafkaTransactionState);
-//
-//		final Properties properties = new Properties();
-//		properties.putAll(this.producerConfig);
-//		properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, kafkaTransactionState.getTransactionalId());
-//		final FlinkKafkaInternalProducer<byte[], byte[]> flinkKafkaInternalProducer = new FlinkKafkaInternalProducer<>(properties);
-//
-//		flinkKafkaInternalProducer.resumeTransaction(kafkaTransactionState.getProducerId(), kafkaTransactionState.getEpoch());
-//
-//		flinkKafkaInternalProducer.commitTransaction();
-//
-//		flinkKafkaInternalProducer.close(Duration.ofSeconds(5));
-//		kafkaTransactionState = create();
+		kafkaTransactionState = create();
 
 	}
 
@@ -128,12 +102,4 @@ class KafkaWriter<T> implements Writer<T, FlinkKafkaProducer.KafkaTransactionSta
 		return new FlinkKafkaProducer.KafkaTransactionState(transactionId, kafkaInternalProducer);
 	}
 
-	private FlinkKafkaInternalProducer<byte[], byte[]> create2() {
-		final String transactionId = UUID.randomUUID().toString();
-		this.producerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionId);
-		FlinkKafkaInternalProducer<byte[], byte[]> fp = new FlinkKafkaInternalProducer<>(producerConfig);
-		fp.initTransactions();
-		fp.beginTransaction();
-		return fp;
-	}
 }

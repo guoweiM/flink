@@ -96,6 +96,7 @@ public class IntegerSource
 				this.blocker.wait();
 			}
 		}
+		Thread.sleep(100_000);
 	}
 
 	@Override

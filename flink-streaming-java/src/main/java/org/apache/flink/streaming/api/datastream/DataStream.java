@@ -1308,19 +1308,20 @@ public class DataStream<T> {
 		final OneInputTransformation sinkWriterTransformation =
 			new OneInputTransformation(
 				getTransformation(),
-				"Split Sink Writer",
+				"Committable Sink Writer",
 				new SinkWriterOperatorFactory(uSink),
 				splitTypeInformation,
 				environment.getParallelism());
 
-//		final CommitTransformation commitTransformation =
-//			new CommitTransformation(
-//				sinkWriterTransformation,
-//				new USinkCommitFunction(uSink),
-//				environment.getParallelism());
+		sinkWriterTransformation.setChainingStrategy(ChainingStrategy.NEVER);
 
-		getExecutionEnvironment().addOperator(sinkWriterTransformation);
-//		getExecutionEnvironment().addOperator(commitTransformation);
+		final CommitTransformation commitTransformation =
+			new CommitTransformation(
+				sinkWriterTransformation,
+				new USinkCommitFunction(uSink),
+				environment.getParallelism());
+
+		getExecutionEnvironment().addOperator(commitTransformation);
 
 		// TODO: return sinkWriterTransformation
 	}
