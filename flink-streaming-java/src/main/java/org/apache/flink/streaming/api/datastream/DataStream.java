@@ -64,15 +64,7 @@ import org.apache.flink.streaming.api.functions.sink.OutputFormatSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SocketClientSink;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
-import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
-import org.apache.flink.streaming.api.operators.StreamFilter;
-import org.apache.flink.streaming.api.operators.StreamFlatMap;
-import org.apache.flink.streaming.api.operators.StreamMap;
-import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
-import org.apache.flink.streaming.api.operators.StreamSink;
+import org.apache.flink.streaming.api.operators.*;
 import org.apache.flink.streaming.api.operators.sink.SinkWriterOperatorFactory;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
@@ -1321,13 +1313,14 @@ public class DataStream<T> {
 				splitTypeInformation,
 				environment.getParallelism());
 
-		final CommitTransformation commitTransformation =
-			new CommitTransformation(
-				sinkWriterTransformation,
-				new USinkCommitFunction(uSink),
-				environment.getParallelism());
+//		final CommitTransformation commitTransformation =
+//			new CommitTransformation(
+//				sinkWriterTransformation,
+//				new USinkCommitFunction(uSink),
+//				environment.getParallelism());
 
-		getExecutionEnvironment().addOperator(commitTransformation);
+		getExecutionEnvironment().addOperator(sinkWriterTransformation);
+//		getExecutionEnvironment().addOperator(commitTransformation);
 
 		// TODO: return sinkWriterTransformation
 	}

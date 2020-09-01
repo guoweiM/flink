@@ -38,7 +38,7 @@ import java.util.*;
 @Internal
 public class StreamingCommitOperator<CommitT>
 		extends AbstractStreamOperator<Void>
-		implements OneInputStreamOperator<CommitT, Void>, CheckpointListener {
+		implements OneInputStreamOperator<CommitT, Void> {
 
 	private static final long serialVersionUID = 1L;
 
@@ -96,15 +96,16 @@ public class StreamingCommitOperator<CommitT>
 
 	@Override
 	public void notifyCheckpointComplete(long checkpointId) throws Exception {
-		Iterator<Map.Entry<Long, List<CommitT>>> it =
-			committablesPerCheckpoint.headMap(checkpointId, true).entrySet().iterator();
-
-		while (it.hasNext()) {
-			Map.Entry<Long, List<CommitT>> item = it.next();
-			for (CommitT commit : item.getValue()) {
-				commitFunction.commit(commit);
-			}
-			it.remove();
-		}
+		super.notifyCheckpointComplete(checkpointId);
+//		Iterator<Map.Entry<Long, List<CommitT>>> it =
+//			committablesPerCheckpoint.headMap(checkpointId, true).entrySet().iterator();
+//
+//		while (it.hasNext()) {
+//			Map.Entry<Long, List<CommitT>> item = it.next();
+//			for (CommitT commit : item.getValue()) {
+//				commitFunction.commit(commit);
+//			}
+//			it.remove();
+//		}
 	}
 }
