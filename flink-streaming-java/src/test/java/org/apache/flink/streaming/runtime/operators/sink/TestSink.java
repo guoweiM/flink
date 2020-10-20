@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  * A {@link Sink} for testing that uses {@link Supplier Suppliers} to create various components
  * under test.
  */
-class TestSink<InputT, CommT, WriterStateT, GlobalCommT>
+public class TestSink<InputT, CommT, WriterStateT, GlobalCommT>
 		implements Sink<InputT, CommT, WriterStateT, GlobalCommT> {
 
 	static final DefaultWriter<String> DEFAULT_WRITER = new DefaultWriter<>();
@@ -147,7 +147,7 @@ class TestSink<InputT, CommT, WriterStateT, GlobalCommT>
 	/**
 	 * This is default writer used for testing {@link Committer} and {@link GlobalCommitter}'s operator.
 	 */
-	static class DefaultWriter<CommT> implements Writer<CommT, CommT, CommT> {
+	public static class DefaultWriter<CommT> implements Writer<CommT, CommT, CommT> {
 
 		@Override
 		public void write(CommT element, Context context) {

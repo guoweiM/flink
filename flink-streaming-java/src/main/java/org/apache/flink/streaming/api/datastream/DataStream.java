@@ -17,6 +17,7 @@
 
 package org.apache.flink.streaming.api.datastream;
 
+import org.apache.flink.annotation.Experimental;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.Public;
 import org.apache.flink.annotation.PublicEvolving;
@@ -40,6 +41,7 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.java.Utils;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -1292,6 +1294,22 @@ public class DataStream<T> {
 
 		getExecutionEnvironment().addOperator(sink.getTransformation());
 		return sink;
+	}
+
+	/**
+	 * Adds the given {@link Sink} to this DataStream. Only streams with sinks added
+	 * will be executed once the {@link StreamExecutionEnvironment#execute()} method is called.
+	 *
+	 * @param sink The user defined sink.
+	 *
+	 * @return The closed DataStream.
+	 */
+	@Experimental
+	public DataStreamSink<T> addSink(Sink<T, ?, ?, ?> sink) {
+		// read the output type of the input Transform to coax out errors about MissingTypeInfo
+		transformation.getOutputType();
+
+		return new DataStreamSink<>(this, clean(sink));
 	}
 
 	/**
