@@ -21,6 +21,7 @@ package org.apache.flink.streaming.runtime.operators.sink;
 import org.apache.flink.api.connector.sink.Writer;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
@@ -28,6 +29,7 @@ import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.hamcrest.Matchers.contains;
 import static org.junit.Assert.assertThat;
@@ -47,10 +49,10 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 	public void stateIsRestored() throws Exception {
 		final long initialTime = 0;
 
-		final OneInputStreamOperatorTestHarness<Integer, Tuple3<Integer, Long, Long>> testHarness =
+		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
 				createTestHarness(TestSink.create(
-						SnapshottingBufferingWriter::new,
-						stateSerializer()));
+						TestSink.SnapshottingBufferingWriter::new,
+						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -68,10 +70,10 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 
 		testHarness.close();
 
-		final OneInputStreamOperatorTestHarness<Integer, Tuple3<Integer, Long, Long>> restoredTestHarness =
+		final OneInputStreamOperatorTestHarness<Integer, String> restoredTestHarness =
 				createTestHarness(TestSink.create(
-						SnapshottingBufferingWriter::new,
-						stateSerializer()));
+						TestSink.SnapshottingBufferingWriter::new,
+						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
 
 		restoredTestHarness.initializeState(snapshot);
 		restoredTestHarness.open();
@@ -82,20 +84,20 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 		assertThat(
 				restoredTestHarness.getOutput(),
 				contains(
-						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime)),
-						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime))));
+						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime).toString()),
+						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime).toString())));
 	}
 
 	/**
 	 * A {@link Writer} buffers elements and snapshots them when asked.
 	 */
 	static class SnapshottingBufferingWriter extends BufferingWriter {
-		public SnapshottingBufferingWriter(List<Tuple3<Integer, Long, Long>> state) {
+		public SnapshottingBufferingWriter(List<String> state) {
 			this.elements = state;
 		}
 
 		@Override
-		public List<Tuple3<Integer, Long, Long>> snapshotState() {
+		public List<String> snapshotState() {
 			return elements;
 		}
 	}

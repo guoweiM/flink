@@ -19,27 +19,20 @@
 package org.apache.flink.streaming.runtime.operators.sink;
 
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
-import org.apache.flink.api.connector.sink.Committer;
-import org.apache.flink.api.connector.sink.GlobalCommitter;
-import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.Writer;
 import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
-import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 import static org.hamcrest.Matchers.contains;
 import static org.junit.Assert.assertThat;
@@ -49,15 +42,17 @@ import static org.junit.Assert.assertThat;
  */
 public abstract class WriterOperatorTestBase extends TestLogger {
 
-	protected abstract <InputT, CommT> AbstractWriterOperatorFactory<InputT, CommT> createWriterOperator(
-			TestSink<InputT, CommT, ?, ?> sink);
+	protected abstract AbstractWriterOperatorFactory<Integer, String> createWriterOperator(TestSink sink);
 
 	@Test
 	public void nonBufferingWriterEmitsWithoutFlush() throws Exception {
 		final long initialTime = 0;
 
-		final OneInputStreamOperatorTestHarness<Integer, Tuple3<Integer, Long, Long>> testHarness =
-				createTestHarness(TestSink.create(NonBufferingWriter::new, stateSerializer()));
+		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
+				createTestHarness(TestSink.newBuilder().addWriter(new NonBufferingWriter()))
+				createTestHarness(TestSink.newBuilder().addCommitter(new NonBufferingWriter()).setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)).build());
+						NonBufferingWriter::new,
+						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -71,8 +66,8 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				testHarness.getOutput(),
 				contains(
 						new Watermark(initialTime),
-						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime)),
-						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime))));
+						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime).toString()),
+						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime).toString())));
 
 		System.err.println(Tuple3.of(1, initialTime + 1, initialTime).toString());
 	}
@@ -81,8 +76,10 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 	public void nonBufferingWriterEmitsOnFlush() throws Exception {
 		final long initialTime = 0;
 
-		final OneInputStreamOperatorTestHarness<Integer, Tuple3<Integer, Long, Long>> testHarness =
-				createTestHarness(TestSink.create(NonBufferingWriter::new, stateSerializer()));
+		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
+				createTestHarness(TestSink.create(
+						NonBufferingWriter::new,
+						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -95,16 +92,18 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				testHarness.getOutput(),
 				contains(
 						new Watermark(initialTime),
-						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime)),
-						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime))));
+						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime).toString()),
+						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime).toString())));
 	}
 
 	@Test
 	public void bufferingWriterDoesNotEmitWithoutFlush() throws Exception {
 		final long initialTime = 0;
 
-		final OneInputStreamOperatorTestHarness<Integer, Tuple3<Integer, Long, Long>> testHarness =
-				createTestHarness(TestSink.create(BufferingWriter::new, stateSerializer()));
+		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
+				createTestHarness(TestSink.create(
+						TestSink.BufferingWriter::new,
+						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -124,8 +123,10 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 	public void bufferingWriterEmitsOnFlush() throws Exception {
 		final long initialTime = 0;
 
-		final OneInputStreamOperatorTestHarness<Integer, Tuple3<Integer, Long, Long>> testHarness =
-				createTestHarness(TestSink.create(BufferingWriter::new, stateSerializer()));
+		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
+				createTestHarness(TestSink.create(
+						TestSink.BufferingWriter::new,
+						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -138,8 +139,8 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				testHarness.getOutput(),
 				contains(
 						new Watermark(initialTime),
-						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime)),
-						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime))));
+						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime).toString()),
+						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime).toString())));
 	}
 
 	/**
@@ -148,8 +149,8 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 	 */
 	static class NonBufferingWriter extends TestWriter {
 		@Override
-		public List<Tuple3<Integer, Long, Long>> prepareCommit(boolean flush) {
-			List<Tuple3<Integer, Long, Long>> result = elements;
+		public List<String> prepareCommit(boolean flush) {
+			List<String> result = elements;
 			elements = new ArrayList<>();
 			return result;
 		}
@@ -161,9 +162,9 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 	 */
 	static class BufferingWriter extends TestWriter {
 		@Override
-		public List<Tuple3<Integer, Long, Long>> prepareCommit(boolean flush) {
+		public List<String> prepareCommit(boolean flush) {
 			if (flush) {
-				List<Tuple3<Integer, Long, Long>> result = elements;
+				List<String> result = elements;
 				elements = new ArrayList<>();
 				return result;
 			} else {
@@ -176,10 +177,9 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 	 * Base class for out testing {@link Writer Writers}.
 	 */
 	abstract static class TestWriter
-			implements Writer<Integer, Tuple3<Integer, Long, Long>, Tuple3<Integer, Long, Long>> {
+			implements Writer<Integer, String, String> {
 
-		// element, timestamp, watermark
-		protected List<Tuple3<Integer, Long, Long>> elements;
+		protected List<String> elements;
 
 		TestWriter() {
 			this.elements = new ArrayList<>();
@@ -187,11 +187,13 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 
 		@Override
 		public void write(Integer element, Context context) {
-			elements.add(Tuple3.of(element, context.timestamp(), context.currentWatermark()));
+			elements.add(Tuple3
+					.of(element, context.timestamp(), context.currentWatermark())
+					.toString());
 		}
 
 		@Override
-		public List<Tuple3<Integer, Long, Long>> snapshotState() {
+		public List<String> snapshotState() {
 			return Collections.emptyList();
 		}
 
@@ -200,115 +202,8 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 		}
 	}
 
-	/**
-	 * A {@link Sink} for testing that uses {@link Supplier Suppliers} to create various components
-	 * under test.
-	 */
-	protected static class TestSink<InputT, CommT, WriterStateT, GlobalCommT>
-			implements Sink<InputT, CommT, WriterStateT, GlobalCommT> {
-
-		private final Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writerSupplier;
-		private final Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier;
-
-		public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
-				Supplier<Writer<InputT, CommT, WriterStateT>> writer) {
-			// We cannot replace this by a method reference because the Java compiler will not be
-			// able to typecheck it.
-			//noinspection Convert2MethodRef
-			return new TestSink<>((state) -> writer.get(), () -> Optional.empty());
-		}
-
-		public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
-				Supplier<Writer<InputT, CommT, WriterStateT>> writer,
-				Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
-			return new TestSink<>((state) -> writer.get(), writerStateSerializerSupplier);
-		}
-
-		public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
-				Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writer,
-				Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
-			return new TestSink<>(writer, writerStateSerializerSupplier);
-		}
-
-		private TestSink(
-				Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writer,
-				Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
-			this.writerSupplier = writer;
-			this.writerStateSerializerSupplier = writerStateSerializerSupplier;
-		}
-
-		public Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> getWriterSupplier() {
-			return writerSupplier;
-		}
-
-		public Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> getWriterStateSerializerSupplier() {
-			return writerStateSerializerSupplier;
-		}
-
-		@Override
-		public Writer<InputT, CommT, WriterStateT> createWriter(
-				InitContext context,
-				List<WriterStateT> states) {
-			return writerSupplier.apply(states);
-		}
-
-		@Override
-		public Optional<Committer<CommT>> createCommitter() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<GlobalCommitter<CommT, GlobalCommT>> createGlobalCommitter() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<SimpleVersionedSerializer<CommT>> getCommittableSerializer() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<SimpleVersionedSerializer<GlobalCommT>> getGlobalCommittableSerializer() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<SimpleVersionedSerializer<WriterStateT>> getWriterStateSerializer() {
-			return writerStateSerializerSupplier.get();
-		}
-	}
-
-	public static Supplier<Optional<SimpleVersionedSerializer<Tuple3<Integer, Long, Long>>>> stateSerializer() {
-		return () -> Optional.of(new WriterStateSerializer());
-	}
-
-	static final class WriterStateSerializer implements SimpleVersionedSerializer<Tuple3<Integer, Long, Long>> {
-
-		@Override
-		public int getVersion() {
-			return 0;
-		}
-
-		@Override
-		public byte[] serialize(Tuple3<Integer, Long, Long> tuple3) throws IOException {
-			return InstantiationUtil.serializeObject(tuple3);
-
-		}
-
-		@Override
-		public Tuple3<Integer, Long, Long> deserialize(
-				int version,
-				byte[] serialized) throws IOException {
-			try {
-				return InstantiationUtil.deserializeObject(serialized, getClass().getClassLoader());
-			} catch (ClassNotFoundException e) {
-				throw new RuntimeException("Failed to deserialize the writer's state.", e);
-			}
-		}
-	}
-
-	protected <CommT> OneInputStreamOperatorTestHarness<Integer, CommT> createTestHarness(
-			TestSink<Integer, CommT, ?, ?> sink) throws Exception {
+	protected OneInputStreamOperatorTestHarness<Integer, String> createTestHarness(
+			TestSink sink) throws Exception {
 
 		return new OneInputStreamOperatorTestHarness<>(
 				createWriterOperator(sink),

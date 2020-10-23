@@ -24,6 +24,8 @@ import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.Writer;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
+import javax.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -36,113 +38,204 @@ import java.util.stream.Collectors;
  * A {@link Sink} for testing that uses {@link Supplier Suppliers} to create various components
  * under test.
  */
-public class TestSink<InputT, CommT, WriterStateT, GlobalCommT>
-		implements Sink<InputT, CommT, WriterStateT, GlobalCommT> {
+public class TestSink implements Sink<Integer, String, String, String> {
 
 	static final DefaultWriter<String> DEFAULT_WRITER = new DefaultWriter<>();
 
-	private final Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writerSupplier;
-	private final Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier;
+	private final Writer<Integer, String, String> writer;
 
-	private final Supplier<Optional<Committer<CommT>>> committerSupplier;
-	private final Supplier<Optional<SimpleVersionedSerializer<CommT>>> committableSerializerSupplier;
+	@Nullable
+	private final SimpleVersionedSerializer<String> writerStateSerializer;
 
-	private final Supplier<Optional<GlobalCommitter<CommT, GlobalCommT>>> globalCommitterSupplier;
-	private final Supplier<Optional<SimpleVersionedSerializer<GlobalCommT>>> globalCommitterSerializerSupplier;
+	@Nullable
+	private final Committer<String> committer;
 
-	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
-			Supplier<Writer<InputT, CommT, WriterStateT>> writer) {
-		// We cannot replace this by a method reference because the Java compiler will not be
-		// able to typecheck it.
-		//noinspection Convert2MethodRef
-		return new TestSink<>((state) -> writer.get(), () -> Optional.empty());
+	@Nullable
+	private final SimpleVersionedSerializer<String> committableSerializer;
+
+	@Nullable
+	private final GlobalCommitter<String, String> globalCommitter;
+
+	@Nullable
+	private final SimpleVersionedSerializer<String> globalCommittableSerializer;
+
+	public TestSink(
+			Writer<Integer, String, String> writer,
+			@Nullable SimpleVersionedSerializer<String> writerStateSerializer,
+			@Nullable Committer<String> committer,
+			@Nullable SimpleVersionedSerializer<String> committableSerializer,
+			@Nullable GlobalCommitter<String, String> globalCommitter,
+			@Nullable SimpleVersionedSerializer<String> globalCommittableSerializer) {
+		this.writer = writer;
+		this.writerStateSerializer = writerStateSerializer;
+		this.committer = committer;
+		this.committableSerializer = committableSerializer;
+		this.globalCommitter = globalCommitter;
+		this.globalCommittableSerializer = globalCommittableSerializer;
 	}
 
-	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
-			Supplier<Writer<InputT, CommT, WriterStateT>> writer,
-			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
-		return new TestSink<>((state) -> writer.get(), writerStateSerializerSupplier);
+	@Override
+	public Writer<Integer, String, String> createWriter(InitContext context, List<String> states) {
+		return writer;
 	}
 
-	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
-			Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writer,
-			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
-		return new TestSink<>(writer, writerStateSerializerSupplier);
+	@Override
+	public Optional<Committer<String>> createCommitter() {
+		return committer == null ? Optional.empty() : Optional.of(committer);
 	}
 
-	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
-			Supplier<Writer<InputT, CommT, WriterStateT>> writer,
-			Supplier<Optional<Committer<CommT>>> committerSupplier,
-			Supplier<Optional<SimpleVersionedSerializer<CommT>>> committableSerializerSupplier,
-			Supplier<Optional<GlobalCommitter<CommT, GlobalCommT>>> globalCommitterSupplier,
-			Supplier<Optional<SimpleVersionedSerializer<GlobalCommT>>> globalCommittableSerializer) {
-		return new TestSink<>(
-				(s) -> writer.get(),
-				() -> Optional.empty(),
-				committerSupplier,
-				committableSerializerSupplier,
-				globalCommitterSupplier,
+	@Override
+	public Optional<GlobalCommitter<String, String>> createGlobalCommitter() {
+		return globalCommitter == null ? Optional.empty() : Optional.of(globalCommitter);
+	}
+
+	@Override
+	public Optional<SimpleVersionedSerializer<String>> getCommittableSerializer() {
+		return committableSerializer
+				== null ? Optional.empty() : Optional.of(committableSerializer);
+	}
+
+	@Override
+	public Optional<SimpleVersionedSerializer<String>> getGlobalCommittableSerializer() {
+		return globalCommittableSerializer == null ? Optional.empty() : Optional.of(
 				globalCommittableSerializer);
 	}
 
-	private TestSink(
-			Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writerSupplier,
-			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier,
-			Supplier<Optional<Committer<CommT>>> committerSupplier,
-			Supplier<Optional<SimpleVersionedSerializer<CommT>>> committableSerializerSupplier,
-			Supplier<Optional<GlobalCommitter<CommT, GlobalCommT>>> globalCommitterSupplier,
-			Supplier<Optional<SimpleVersionedSerializer<GlobalCommT>>> globalCommitterSerializerSupplier) {
-		this.writerSupplier = writerSupplier;
-		this.writerStateSerializerSupplier = writerStateSerializerSupplier;
-		this.committerSupplier = committerSupplier;
-		this.committableSerializerSupplier = committableSerializerSupplier;
-		this.globalCommitterSupplier = globalCommitterSupplier;
-		this.globalCommitterSerializerSupplier = globalCommitterSerializerSupplier;
-	}
-
-	private TestSink(
-			Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writer,
-			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
-		this(
-				writer,
-				writerStateSerializerSupplier,
-				Optional::empty,
-				Optional::empty,
-				Optional::empty,
-				Optional::empty);
-	}
-
 	@Override
-	public Writer<InputT, CommT, WriterStateT> createWriter(
-			InitContext context,
-			List<WriterStateT> states) {
-		return writerSupplier.apply(states);
+	public Optional<SimpleVersionedSerializer<String>> getWriterStateSerializer() {
+		return writerStateSerializer
+				== null ? Optional.empty() : Optional.of(writerStateSerializer);
 	}
 
-	@Override
-	public Optional<Committer<CommT>> createCommitter() {
-		return committerSupplier.get();
+	public static Builder newBuilder() {
+		return new Builder();
 	}
 
-	@Override
-	public Optional<GlobalCommitter<CommT, GlobalCommT>> createGlobalCommitter() {
-		return globalCommitterSupplier.get();
-	}
+	static class Builder {
 
-	@Override
-	public Optional<SimpleVersionedSerializer<CommT>> getCommittableSerializer() {
-		return committableSerializerSupplier.get();
-	}
+		private Writer<Integer, String, String> writer;
 
-	@Override
-	public Optional<SimpleVersionedSerializer<GlobalCommT>> getGlobalCommittableSerializer() {
-		return globalCommitterSerializerSupplier.get();
-	}
+		private SimpleVersionedSerializer<String> writerStateSerializer;
 
-	@Override
-	public Optional<SimpleVersionedSerializer<WriterStateT>> getWriterStateSerializer() {
-		return writerStateSerializerSupplier.get();
+		private Committer<String> committer;
+
+		private SimpleVersionedSerializer<String> committableSerializer;
+
+		private GlobalCommitter<String, String> globalCommitter;
+
+		private SimpleVersionedSerializer<String> globalCommittableSerializer;
+
+		public Builder addWriter(Writer<Integer, String, String> writer) {
+			this.writer = writer;
+			return this;
+		}
+
+		public Builder setWriterStateSerializer(SimpleVersionedSerializer<String> writerStateSerializer) {
+			this.writerStateSerializer = writerStateSerializer;
+			return this;
+		}
+
+		public Builder addCommitter(Committer<String> committer) {
+			this.committer = committer;
+			return this;
+		}
+
+		public Builder setCommittableSerializer(SimpleVersionedSerializer<String> committableSerializer) {
+			this.committableSerializer = committableSerializer;
+			return this;
+		}
+
+		public Builder addGlobalCommitter(GlobalCommitter<String, String> globalCommitter) {
+			this.globalCommitter = globalCommitter;
+			return this;
+		}
+
+		public Builder setGlobalCommittableSerializer(SimpleVersionedSerializer<String> globalCommittableSerializer) {
+			this.globalCommittableSerializer = globalCommittableSerializer;
+			return this;
+		}
+
+		public TestSink build() {
+			return new TestSink(
+					writer,
+					writerStateSerializer,
+					committer,
+					committableSerializer,
+					globalCommitter,
+					globalCommittableSerializer);
+		}
 	}
+//	private final Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writerSupplier;
+//	private final Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier;
+//
+//	private final Supplier<Optional<Committer<CommT>>> committerSupplier;
+//	private final Supplier<Optional<SimpleVersionedSerializer<CommT>>> committableSerializerSupplier;
+//
+//	private final Supplier<Optional<GlobalCommitter<CommT, GlobalCommT>>> globalCommitterSupplier;
+//	private final Supplier<Optional<SimpleVersionedSerializer<GlobalCommT>>> globalCommitterSerializerSupplier;
+//
+//	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
+//			Supplier<Writer<InputT, CommT, WriterStateT>> writer) {
+//		// We cannot replace this by a method reference because the Java compiler will not be
+//		// able to typecheck it.
+//		//noinspection Convert2MethodRef
+//		return new TestSink<>((state) -> writer.get(), () -> Optional.empty());
+//	}
+//
+//	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
+//			Supplier<Writer<InputT, CommT, WriterStateT>> writer,
+//			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
+//		return new TestSink<>((state) -> writer.get(), writerStateSerializerSupplier);
+//	}
+//
+//	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
+//			Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writer,
+//			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
+//		return new TestSink<>(writer, writerStateSerializerSupplier);
+//	}
+//
+//	public static <InputT, CommT, WriterStateT, GlobalCommT> TestSink<InputT, CommT, WriterStateT, GlobalCommT> create(
+//			Supplier<Writer<InputT, CommT, WriterStateT>> writer,
+//			Supplier<Optional<Committer<CommT>>> committerSupplier,
+//			Supplier<Optional<SimpleVersionedSerializer<CommT>>> committableSerializerSupplier,
+//			Supplier<Optional<GlobalCommitter<CommT, GlobalCommT>>> globalCommitterSupplier,
+//			Supplier<Optional<SimpleVersionedSerializer<GlobalCommT>>> globalCommittableSerializer) {
+//		return new TestSink<>(
+//				(s) -> writer.get(),
+//				() -> Optional.empty(),
+//				committerSupplier,
+//				committableSerializerSupplier,
+//				globalCommitterSupplier,
+//				globalCommittableSerializer);
+//	}
+//
+//	private TestSink(
+//			Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writerSupplier,
+//			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier,
+//			Supplier<Optional<Committer<CommT>>> committerSupplier,
+//			Supplier<Optional<SimpleVersionedSerializer<CommT>>> committableSerializerSupplier,
+//			Supplier<Optional<GlobalCommitter<CommT, GlobalCommT>>> globalCommitterSupplier,
+//			Supplier<Optional<SimpleVersionedSerializer<GlobalCommT>>> globalCommitterSerializerSupplier) {
+//		this.writerSupplier = writerSupplier;
+//		this.writerStateSerializerSupplier = writerStateSerializerSupplier;
+//		this.committerSupplier = committerSupplier;
+//		this.committableSerializerSupplier = committableSerializerSupplier;
+//		this.globalCommitterSupplier = globalCommitterSupplier;
+//		this.globalCommitterSerializerSupplier = globalCommitterSerializerSupplier;
+//	}
+//
+//	private TestSink(
+//			Function<List<WriterStateT>, Writer<InputT, CommT, WriterStateT>> writer,
+//			Supplier<Optional<SimpleVersionedSerializer<WriterStateT>>> writerStateSerializerSupplier) {
+//		this(
+//				writer,
+//				writerStateSerializerSupplier,
+//				Optional::empty,
+//				Optional::empty,
+//				Optional::empty,
+//				Optional::empty);
+//	}
+
 
 	/**
 	 * This is default writer used for testing {@link Committer} and {@link GlobalCommitter}'s operator.
@@ -201,6 +294,7 @@ public class TestSink<InputT, CommT, WriterStateT, GlobalCommT>
 	/**
 	 * The class used for normal committer test.
 	 */
+	//TODO:: rename it
 	static class TestCommitter extends AbstractTestCommitter<String> {
 
 		@Override

@@ -30,6 +30,7 @@ import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,7 +46,7 @@ public class SinkTransformationTranslatorTest extends TestLogger {
 		// This will throw exception because that lambda class(line TestSink::57)
 		// would has some reference which does not serializable
 		DataStreamSink<String> dataStreamSink =
-				env.fromElements("1", "2").addSink(TestSink.create(() -> new TestSink.DefaultWriter()));
+				env.fromElements("1", "2").addSink(new TestSink1());
 
 		StreamGraph streamGraph = env.getStreamGraph("test");
 		System.err.println(streamGraph.toString());
@@ -56,6 +57,8 @@ public class SinkTransformationTranslatorTest extends TestLogger {
 	}
 
 	class TestSink1 implements Sink<String, String, String, String> {
+
+		final List<String> cache = new ArrayList<>();
 
 		@Override
 		public Writer<String, String, String> createWriter(
