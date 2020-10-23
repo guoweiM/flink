@@ -57,8 +57,8 @@ import org.apache.flink.streaming.runtime.translators.MultiInputTransformationTr
 import org.apache.flink.streaming.runtime.translators.OneInputTransformationTranslator;
 import org.apache.flink.streaming.runtime.translators.PartitionTransformationTranslator;
 import org.apache.flink.streaming.runtime.translators.SideOutputTransformationTranslator;
-import org.apache.flink.streaming.runtime.translators.SourceTransformationTranslator;
 import org.apache.flink.streaming.runtime.translators.SinkTransformationTranslator;
+import org.apache.flink.streaming.runtime.translators.SourceTransformationTranslator;
 import org.apache.flink.streaming.runtime.translators.TwoInputTransformationTranslator;
 import org.apache.flink.streaming.runtime.translators.UnionTransformationTranslator;
 

@@ -73,6 +73,8 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 						new Watermark(initialTime),
 						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime)),
 						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime))));
+
+		System.err.println(Tuple3.of(1, initialTime + 1, initialTime).toString());
 	}
 
 	@Test
