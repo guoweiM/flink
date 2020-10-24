@@ -29,7 +29,6 @@ import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.hamcrest.Matchers.contains;
 import static org.junit.Assert.assertThat;
@@ -40,8 +39,8 @@ import static org.junit.Assert.assertThat;
 public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 
 	@Override
-	protected <InputT, CommT> AbstractWriterOperatorFactory<InputT, CommT> createWriterOperator(
-			TestSink<InputT, CommT, ?, ?> sink) {
+	protected AbstractWriterOperatorFactory createWriterOperator(
+			TestSink sink) {
 		return new StatefulWriterOperatorFactory<>(sink);
 	}
 
@@ -50,9 +49,12 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 		final long initialTime = 0;
 
 		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
-				createTestHarness(TestSink.create(
-						TestSink.SnapshottingBufferingWriter::new,
-						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
+				createTestHarness(TestSink
+						.newBuilder()
+						.addWriter(new SnapshottingBufferingWriter())
+						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.build());
+
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -71,9 +73,11 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 		testHarness.close();
 
 		final OneInputStreamOperatorTestHarness<Integer, String> restoredTestHarness =
-				createTestHarness(TestSink.create(
-						TestSink.SnapshottingBufferingWriter::new,
-						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
+				createTestHarness(TestSink
+						.newBuilder()
+						.addWriter(new SnapshottingBufferingWriter())
+						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.build());
 
 		restoredTestHarness.initializeState(snapshot);
 		restoredTestHarness.open();
@@ -92,13 +96,15 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 	 * A {@link Writer} buffers elements and snapshots them when asked.
 	 */
 	static class SnapshottingBufferingWriter extends BufferingWriter {
-		public SnapshottingBufferingWriter(List<String> state) {
-			this.elements = state;
-		}
 
 		@Override
 		public List<String> snapshotState() {
 			return elements;
+		}
+
+		@Override
+		void restoredFrom(List<String> states) {
+			this.elements = states;
 		}
 	}
 }

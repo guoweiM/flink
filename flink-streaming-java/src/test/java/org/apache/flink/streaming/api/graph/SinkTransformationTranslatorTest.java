@@ -26,6 +26,7 @@ import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.runtime.operators.sink.TestSink;
+import org.apache.flink.streaming.runtime.operators.sink.WriterOperatorTestBase;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
@@ -45,51 +46,12 @@ public class SinkTransformationTranslatorTest extends TestLogger {
 
 		// This will throw exception because that lambda class(line TestSink::57)
 		// would has some reference which does not serializable
-		DataStreamSink<String> dataStreamSink =
-				env.fromElements("1", "2").addSink(new TestSink1());
+		DataStreamSink<Integer> dataStreamSink =
+				env.fromElements(1, 2).addSink(
+						TestSink.newBuilder()
+								.addWriter().build());
 
 		StreamGraph streamGraph = env.getStreamGraph("test");
 		System.err.println(streamGraph.toString());
-	}
-
-	static class TestWriter extends TestSink.DefaultWriter<String> {
-
-	}
-
-	class TestSink1 implements Sink<String, String, String, String> {
-
-		final List<String> cache = new ArrayList<>();
-
-		@Override
-		public Writer<String, String, String> createWriter(
-				InitContext context,
-				List<String> states) {
-			return new org.apache.flink.streaming.runtime.operators.sink.TestSink.DefaultWriter<>();
-		}
-
-		@Override
-		public Optional<Committer<String>> createCommitter() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<GlobalCommitter<String, String>> createGlobalCommitter() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<SimpleVersionedSerializer<String>> getCommittableSerializer() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<SimpleVersionedSerializer<String>> getGlobalCommittableSerializer() {
-			return Optional.empty();
-		}
-
-		@Override
-		public Optional<SimpleVersionedSerializer<String>> getWriterStateSerializer() {
-			return Optional.empty();
-		}
 	}
 }

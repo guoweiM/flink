@@ -29,10 +29,8 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.streaming.runtime.operators.sink.TestSink.DEFAULT_WRITER;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.is;
@@ -64,7 +62,7 @@ public class BatchGlobalCommitterOperatorTest extends TestLogger {
 
 	@Test
 	public void endOfInput() throws Exception {
-		final TestSink.TestGlobalCommitter globalCommitter = new TestSink.TestGlobalCommitter("");
+		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
 		final OneInputStreamOperatorTestHarness<String, String> testHarness =
 				createTestHarness(globalCommitter);
 		final List<String> inputs = Arrays.asList("compete", "swear", "shallow");
@@ -93,7 +91,7 @@ public class BatchGlobalCommitterOperatorTest extends TestLogger {
 
 	@Test
 	public void close() throws Exception {
-		final TestSink.TestGlobalCommitter globalCommitter = new TestSink.TestGlobalCommitter("");
+		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
 		final OneInputStreamOperatorTestHarness<String, String> testHarness =
 				createTestHarness(globalCommitter);
 		testHarness.initializeEmptyState();
@@ -107,13 +105,12 @@ public class BatchGlobalCommitterOperatorTest extends TestLogger {
 			GlobalCommitter<String, String> globalCommitter) throws Exception {
 
 		return new OneInputStreamOperatorTestHarness<>(
-				new BatchGlobalCommitterOperatorFactory<>(TestSink.create(
-						() -> DEFAULT_WRITER,
-						() -> Optional.empty(),
-						() -> Optional.empty(),
-						() -> globalCommitter == null ? Optional.empty() : Optional.of(
-								globalCommitter),
-						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE))),
+				new BatchGlobalCommitterOperatorFactory<>(TestSink
+						.newBuilder()
+						.addWriter()
+						.addGlobalCommitter(globalCommitter)
+						.setGlobalCommittableSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.build()),
 				StringSerializer.INSTANCE);
 	}
 }

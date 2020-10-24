@@ -32,7 +32,6 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import static org.hamcrest.Matchers.contains;
 import static org.junit.Assert.assertThat;
@@ -49,10 +48,11 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 		final long initialTime = 0;
 
 		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
-				createTestHarness(TestSink.newBuilder().addWriter(new NonBufferingWriter()))
-				createTestHarness(TestSink.newBuilder().addCommitter(new NonBufferingWriter()).setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)).build());
-						NonBufferingWriter::new,
-						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
+				createTestHarness(TestSink
+						.newBuilder()
+						.addWriter(new NonBufferingWriter())
+						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.build());
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -68,8 +68,6 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 						new Watermark(initialTime),
 						new StreamRecord<>(Tuple3.of(1, initialTime + 1, initialTime).toString()),
 						new StreamRecord<>(Tuple3.of(2, initialTime + 2, initialTime).toString())));
-
-		System.err.println(Tuple3.of(1, initialTime + 1, initialTime).toString());
 	}
 
 	@Test
@@ -77,9 +75,11 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 		final long initialTime = 0;
 
 		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
-				createTestHarness(TestSink.create(
-						NonBufferingWriter::new,
-						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
+				createTestHarness(TestSink
+						.newBuilder()
+						.addWriter(new NonBufferingWriter())
+						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.build());
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -101,9 +101,11 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 		final long initialTime = 0;
 
 		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
-				createTestHarness(TestSink.create(
-						TestSink.BufferingWriter::new,
-						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
+				createTestHarness(TestSink
+						.newBuilder()
+						.addWriter(new BufferingWriter())
+						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.build());
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -124,9 +126,11 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 		final long initialTime = 0;
 
 		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
-				createTestHarness(TestSink.create(
-						TestSink.BufferingWriter::new,
-						() -> Optional.of(SimpleVersionedStringSerializer.INSTANCE)));
+				createTestHarness(TestSink
+						.newBuilder()
+						.addWriter(new BufferingWriter())
+						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.build());
 		testHarness.open();
 
 		testHarness.processWatermark(initialTime);
@@ -147,12 +151,17 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 	 * A {@link Writer} that returns all committables from {@link #prepareCommit(boolean)} without
 	 * waiting for {@code flush} to be {@code true}.
 	 */
-	static class NonBufferingWriter extends TestWriter {
+	static class NonBufferingWriter extends TestSink.TestWriter {
 		@Override
 		public List<String> prepareCommit(boolean flush) {
 			List<String> result = elements;
 			elements = new ArrayList<>();
 			return result;
+		}
+
+		@Override
+		void restoredFrom(List<String> states) {
+
 		}
 	}
 
@@ -160,7 +169,7 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 	 * A {@link Writer} that only returns committables from {@link #prepareCommit(boolean)} when
 	 * {@code flush} is {@code true}.
 	 */
-	static class BufferingWriter extends TestWriter {
+	static class BufferingWriter extends TestSink.TestWriter {
 		@Override
 		public List<String> prepareCommit(boolean flush) {
 			if (flush) {
@@ -171,34 +180,10 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				return Collections.emptyList();
 			}
 		}
-	}
-
-	/**
-	 * Base class for out testing {@link Writer Writers}.
-	 */
-	abstract static class TestWriter
-			implements Writer<Integer, String, String> {
-
-		protected List<String> elements;
-
-		TestWriter() {
-			this.elements = new ArrayList<>();
-		}
 
 		@Override
-		public void write(Integer element, Context context) {
-			elements.add(Tuple3
-					.of(element, context.timestamp(), context.currentWatermark())
-					.toString());
-		}
+		void restoredFrom(List<String> states) {
 
-		@Override
-		public List<String> snapshotState() {
-			return Collections.emptyList();
-		}
-
-		@Override
-		public void close() throws Exception {
 		}
 	}
 
