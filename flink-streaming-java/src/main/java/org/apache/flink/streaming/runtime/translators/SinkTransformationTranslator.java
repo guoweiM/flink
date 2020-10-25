@@ -151,7 +151,7 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 		return committer;
 	}
 
-	private void createAndTranslateStreamingGlobalCommitter(
+	private OneInputTransformation<CommT, GlobalCommT> createAndTranslateStreamingGlobalCommitter(
 			Transformation<CommT> input,
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
 			Context context) {
@@ -168,6 +168,7 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 				new OneInputTransformationTranslator<>();
 		inheritPropertiesFromSinkTransformation(globalCommitter, transformation);
 		globalCommitterTranslator.translateForStreaming(globalCommitter, context);
+		return globalCommitter;
 	}
 
 	private void inheritPropertiesFromSinkTransformation(

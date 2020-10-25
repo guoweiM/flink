@@ -20,7 +20,6 @@ package org.apache.flink.streaming.runtime.operators.sink;
 
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.api.connector.sink.GlobalCommitter;
-import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.util.TestLogger;
@@ -62,7 +61,8 @@ public class BatchGlobalCommitterOperatorTest extends TestLogger {
 
 	@Test
 	public void endOfInput() throws Exception {
-		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
+		final TestSink.DefaultGlobalCommitter globalCommitter = new TestSink.DefaultGlobalCommitter(
+				"");
 		final OneInputStreamOperatorTestHarness<String, String> testHarness =
 				createTestHarness(globalCommitter);
 		final List<String> inputs = Arrays.asList("compete", "swear", "shallow");
@@ -91,7 +91,8 @@ public class BatchGlobalCommitterOperatorTest extends TestLogger {
 
 	@Test
 	public void close() throws Exception {
-		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
+		final TestSink.DefaultGlobalCommitter globalCommitter = new TestSink.DefaultGlobalCommitter(
+				"");
 		final OneInputStreamOperatorTestHarness<String, String> testHarness =
 				createTestHarness(globalCommitter);
 		testHarness.initializeEmptyState();
@@ -109,7 +110,7 @@ public class BatchGlobalCommitterOperatorTest extends TestLogger {
 						.newBuilder()
 						.addWriter()
 						.addGlobalCommitter(globalCommitter)
-						.setGlobalCommittableSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.setGlobalCommittableSerializer(TestSink.StringCommittableSerializer.INSTANCE)
 						.build()),
 				StringSerializer.INSTANCE);
 	}

@@ -20,6 +20,7 @@ package org.apache.flink.streaming.runtime.operators.sink;
 
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.api.connector.sink.Committer;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.util.TestLogger;
@@ -61,7 +62,7 @@ public class BatchCommitterOperatorTest extends TestLogger {
 	@Test
 	public void commit() throws Exception {
 
-		final TestSink.NonRetryCommitter committer = new TestSink.NonRetryCommitter();
+		final TestSink.DefaultCommitter committer = new TestSink.DefaultCommitter();
 		final OneInputStreamOperatorTestHarness<String, String> testHarness = createTestHarness(
 				committer);
 
@@ -87,7 +88,7 @@ public class BatchCommitterOperatorTest extends TestLogger {
 
 	@Test
 	public void close() throws Exception {
-		final TestSink.NonRetryCommitter committer = new TestSink.NonRetryCommitter();
+		final TestSink.DefaultCommitter committer = new TestSink.DefaultCommitter();
 		final OneInputStreamOperatorTestHarness<String, String> testHarness = createTestHarness(
 				committer);
 		testHarness.initializeEmptyState();
@@ -103,6 +104,7 @@ public class BatchCommitterOperatorTest extends TestLogger {
 						.newBuilder()
 						.addWriter()
 						.addCommitter(committer)
+						.setCommittableSerializer(TestSink.StringCommittableSerializer.INSTANCE)
 						.build()),
 				StringSerializer.INSTANCE);
 	}

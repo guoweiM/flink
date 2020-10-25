@@ -20,8 +20,8 @@ package org.apache.flink.streaming.runtime.operators.sink;
 
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.api.connector.sink.GlobalCommitter;
+import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
-import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.util.TestLogger;
@@ -49,7 +49,7 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 	@Test(expected = IllegalStateException.class)
 	public void throwExceptionWithoutSerializer() throws Exception {
 		final OneInputStreamOperatorTestHarness<String, String> testHarness =
-				createTestHarness(new TestSink.NonRetryGlobalCommitter(""), null);
+				createTestHarness(new TestSink.DefaultGlobalCommitter(""), null);
 		testHarness.initializeEmptyState();
 		testHarness.open();
 	}
@@ -57,7 +57,7 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 	@Test(expected = IllegalStateException.class)
 	public void throwExceptionWithoutCommitter() throws Exception {
 		final OneInputStreamOperatorTestHarness<String, String> testHarness =
-				createTestHarness(null, SimpleVersionedStringSerializer.INSTANCE);
+				createTestHarness(null, TestSink.StringCommittableSerializer.INSTANCE);
 		testHarness.initializeEmptyState();
 		testHarness.open();
 	}
@@ -83,7 +83,7 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 
 	@Test
 	public void closeCommitter() throws Exception {
-		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
+		final TestSink.DefaultGlobalCommitter globalCommitter = new TestSink.DefaultGlobalCommitter("");
 		final OneInputStreamOperatorTestHarness<String, String> testHarness = createTestHarness(
 				globalCommitter);
 		testHarness.initializeEmptyState();
@@ -105,7 +105,7 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 				createTestHarness(),
 				input2);
 
-		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
+		final TestSink.DefaultGlobalCommitter globalCommitter = new TestSink.DefaultGlobalCommitter("");
 		final OneInputStreamOperatorTestHarness<String, String> testHarness = createTestHarness(
 				globalCommitter);
 
@@ -120,8 +120,8 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 		testHarness.open();
 
 		final List<String> expectedOutput = new ArrayList<>();
-		expectedOutput.add(TestSink.NonRetryGlobalCommitter.COMBINER.apply(input1));
-		expectedOutput.add(TestSink.NonRetryGlobalCommitter.COMBINER.apply(input2));
+		expectedOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(input1));
+		expectedOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(input2));
 
 		testHarness.snapshot(1L, 1L);
 		testHarness.notifyOfCompletedCheckpoint(1L);
@@ -140,7 +140,7 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 	@Test
 	public void commitMultipleStagesTogether() throws Exception {
 
-		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
+		final TestSink.DefaultGlobalCommitter globalCommitter = new TestSink.DefaultGlobalCommitter("");
 
 		final List<String> input1 = Arrays.asList("cautious", "nature");
 		final List<String> input2 = Arrays.asList("count", "over");
@@ -148,9 +148,9 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 
 		final List<String> expectedOutput = new ArrayList<>();
 
-		expectedOutput.add(TestSink.NonRetryGlobalCommitter.COMBINER.apply(input1));
-		expectedOutput.add(TestSink.NonRetryGlobalCommitter.COMBINER.apply(input2));
-		expectedOutput.add(TestSink.NonRetryGlobalCommitter.COMBINER.apply(input3));
+		expectedOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(input1));
+		expectedOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(input2));
+		expectedOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(input3));
 
 		final OneInputStreamOperatorTestHarness<String, String> testHarness = createTestHarness(
 				globalCommitter);
@@ -189,12 +189,12 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 	@Test
 	public void filterRecoveredCommittables() throws Exception {
 		final List<String> input = Arrays.asList("silent", "elder", "patience");
-		final String successCommittedCommittable = TestSink.NonRetryGlobalCommitter.COMBINER.apply(input);
+		final String successCommittedCommittable = TestSink.DefaultGlobalCommitter.COMBINER.apply(input);
 
 		final OperatorSubtaskState operatorSubtaskState = buildSubtaskState(
 				createTestHarness(),
 				input);
-		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter(
+		final TestSink.DefaultGlobalCommitter globalCommitter = new TestSink.DefaultGlobalCommitter(
 				successCommittedCommittable);
 
 		final OneInputStreamOperatorTestHarness<String, String> testHarness = createTestHarness(
@@ -212,7 +212,7 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 
 	@Test
 	public void endOfInput() throws Exception {
-		final TestSink.NonRetryGlobalCommitter globalCommitter = new TestSink.NonRetryGlobalCommitter("");
+		final TestSink.DefaultGlobalCommitter globalCommitter = new TestSink.DefaultGlobalCommitter("");
 
 		final OneInputStreamOperatorTestHarness<String, String> testHarness = createTestHarness(
 				globalCommitter);
@@ -229,18 +229,18 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 
 	private OneInputStreamOperatorTestHarness<String, String> createTestHarness() throws Exception {
 		return createTestHarness(
-				new TestSink.NonRetryGlobalCommitter(""),
-				SimpleVersionedStringSerializer.INSTANCE);
+				new TestSink.DefaultGlobalCommitter(""),
+				TestSink.StringCommittableSerializer.INSTANCE);
 	}
 
 	private OneInputStreamOperatorTestHarness<String, String> createTestHarness(
 			GlobalCommitter<String, String> globalCommitter) throws Exception {
-		return createTestHarness(globalCommitter, SimpleVersionedStringSerializer.INSTANCE);
+		return createTestHarness(globalCommitter, TestSink.StringCommittableSerializer.INSTANCE);
 	}
 
 	private OneInputStreamOperatorTestHarness<String, String> createTestHarness(
 			GlobalCommitter<String, String> globalCommitter,
-			SimpleVersionedStringSerializer serializer) throws Exception {
+			SimpleVersionedSerializer<String> serializer) throws Exception {
 		return new OneInputStreamOperatorTestHarness<>(
 				new GlobalStreamingCommitterOperatorFactory<>(TestSink
 						.newBuilder()

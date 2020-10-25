@@ -24,9 +24,11 @@ import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.connector.sink.Writer;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,6 +36,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * A {@link Sink} for unit test.
@@ -57,7 +61,7 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	@Nullable
 	private final SimpleVersionedSerializer<String> globalCommittableSerializer;
 
-	public TestSink(
+	private TestSink(
 			TestWriter writer,
 			@Nullable SimpleVersionedSerializer<String> writerStateSerializer,
 			@Nullable Committer<String> committer,
@@ -125,10 +129,13 @@ public class TestSink implements Sink<Integer, String, String, String> {
 		private SimpleVersionedSerializer<String> globalCommittableSerializer;
 
 		public Builder addWriter(TestWriter writer) {
-			this.writer = writer;
+			this.writer = checkNotNull(writer);
 			return this;
 		}
 
+		/**
+		 * Using the {@link DefaultWriter}.
+		 */
 		public Builder addWriter() {
 			this.writer = new DefaultWriter();
 			return this;
@@ -149,6 +156,15 @@ public class TestSink implements Sink<Integer, String, String, String> {
 			return this;
 		}
 
+		/**
+		 * Using the {@link DefaultWriter}.
+		 */
+		public Builder addCommitter() {
+			this.committer = new DefaultCommitter();
+			this.committableSerializer = StringCommittableSerializer.INSTANCE;
+			return this;
+		}
+
 		public Builder addGlobalCommitter(GlobalCommitter<String, String> globalCommitter) {
 			this.globalCommitter = globalCommitter;
 			return this;
@@ -156,6 +172,15 @@ public class TestSink implements Sink<Integer, String, String, String> {
 
 		public Builder setGlobalCommittableSerializer(SimpleVersionedSerializer<String> globalCommittableSerializer) {
 			this.globalCommittableSerializer = globalCommittableSerializer;
+			return this;
+		}
+
+		/**
+		 * Using the {@link DefaultGlobalCommitter}.
+		 */
+		public Builder addGlobalCommitter() {
+			this.globalCommitter = new DefaultGlobalCommitter("");
+			this.globalCommittableSerializer = StringCommittableSerializer.INSTANCE;
 			return this;
 		}
 
@@ -204,7 +229,7 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	}
 
 	/**
-	 * This is default writer used for testing sink.
+	 * A {@link Writer} that pre-commit nothing.
 	 */
 	static class DefaultWriter extends TestWriter {
 		@Override
@@ -223,13 +248,13 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	/**
 	 * Base class for testing {@link Committer} and {@link GlobalCommitter}.
 	 */
-	abstract static class AbstractTestCommitter {
+	static class TestCommitter implements Serializable {
 
 		protected List<String> committedData;
 
 		private boolean isClosed;
 
-		public AbstractTestCommitter() {
+		public TestCommitter() {
 			this.committedData = new ArrayList<>();
 			this.isClosed = false;
 		}
@@ -250,7 +275,7 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	/**
 	 * A {@link Committer} that always commits committables successfully.
 	 */
-	public static class NonRetryCommitter extends AbstractTestCommitter implements Committer<String> {
+	static class DefaultCommitter extends TestCommitter implements Committer<String> {
 
 		@Override
 		public List<String> commit(List<String> committables) {
@@ -264,7 +289,7 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	/**
 	 * A {@link Committer} that always re-commits the committables data it received.
 	 */
-	static class AlwaysRetryCommitter extends AbstractTestCommitter implements Committer<String> {
+	static class AlwaysRetryCommitter extends TestCommitter implements Committer<String> {
 
 		@Override
 		public List<String> commit(List<String> committables) {
@@ -277,13 +302,13 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	/**
 	 * A {@link GlobalCommitter} that always commits global committables successfully.
 	 */
-	public static class NonRetryGlobalCommitter extends AbstractTestCommitter implements GlobalCommitter<String, String> {
+	static class DefaultGlobalCommitter extends TestCommitter implements GlobalCommitter<String, String> {
 
 		static final Function<List<String>, String> COMBINER = (x) -> String.join("+", x);
 
 		private final String committedSuccessData;
 
-		NonRetryGlobalCommitter(String committedSuccessData) {
+		DefaultGlobalCommitter(String committedSuccessData) {
 			this.committedSuccessData = committedSuccessData;
 		}
 
@@ -304,11 +329,12 @@ public class TestSink implements Sink<Integer, String, String, String> {
 		}
 
 		@Override
-		public List<String> commit(List<String> globalCommittables) throws Exception {
+		public List<String> commit(List<String> globalCommittables) {
 			if (committedData != null) {
 				committedData.addAll(globalCommittables);
 			}
-			return Collections.emptyList();		}
+			return Collections.emptyList();
+		}
 
 		@Override
 		public void endOfInput() {
@@ -319,7 +345,7 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	/**
 	 * A {@link GlobalCommitter} that always re-commits global committables it received.
 	 */
-	static class AlwaysRetryGlobalCommitter extends AbstractTestCommitter implements GlobalCommitter<String, String> {
+	static class AlwaysRetryGlobalCommitter extends TestCommitter implements GlobalCommitter<String, String> {
 
 		@Override
 		public List<String> filterRecoveredCommittables(List<String> globalCommittables) {
@@ -339,6 +365,30 @@ public class TestSink implements Sink<Integer, String, String, String> {
 		@Override
 		public List<String> commit(List<String> committables) {
 			return committables;
+		}
+	}
+
+	/**
+	 * We introduce this {@link StringCommittableSerializer} is because that all the fields of {@link TestSink} should be
+	 * serializable.
+	 */
+	public static class StringCommittableSerializer implements SimpleVersionedSerializer<String>, Serializable {
+
+		public static final StringCommittableSerializer INSTANCE = new StringCommittableSerializer();
+
+		@Override
+		public int getVersion() {
+			return SimpleVersionedStringSerializer.INSTANCE.getVersion();
+		}
+
+		@Override
+		public byte[] serialize(String obj) throws IOException {
+			return SimpleVersionedStringSerializer.INSTANCE.serialize(obj);
+		}
+
+		@Override
+		public String deserialize(int version, byte[] serialized) throws IOException {
+			return SimpleVersionedStringSerializer.INSTANCE.deserialize(version, serialized);
 		}
 	}
 }

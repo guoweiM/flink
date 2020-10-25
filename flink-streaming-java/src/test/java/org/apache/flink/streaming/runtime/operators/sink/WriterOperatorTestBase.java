@@ -21,7 +21,6 @@ package org.apache.flink.streaming.runtime.operators.sink;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
 import org.apache.flink.api.connector.sink.Writer;
 import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
@@ -51,7 +50,7 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				createTestHarness(TestSink
 						.newBuilder()
 						.addWriter(new NonBufferingWriter())
-						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.setWriterStateSerializer(TestSink.StringCommittableSerializer.INSTANCE)
 						.build());
 		testHarness.open();
 
@@ -78,7 +77,7 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				createTestHarness(TestSink
 						.newBuilder()
 						.addWriter(new NonBufferingWriter())
-						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.setWriterStateSerializer(TestSink.StringCommittableSerializer.INSTANCE)
 						.build());
 		testHarness.open();
 
@@ -104,7 +103,7 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				createTestHarness(TestSink
 						.newBuilder()
 						.addWriter(new BufferingWriter())
-						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.setWriterStateSerializer(TestSink.StringCommittableSerializer.INSTANCE)
 						.build());
 		testHarness.open();
 
@@ -129,7 +128,7 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 				createTestHarness(TestSink
 						.newBuilder()
 						.addWriter(new BufferingWriter())
-						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.setWriterStateSerializer(TestSink.StringCommittableSerializer.INSTANCE)
 						.build());
 		testHarness.open();
 

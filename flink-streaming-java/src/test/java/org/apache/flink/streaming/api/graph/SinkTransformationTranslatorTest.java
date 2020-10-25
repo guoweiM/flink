@@ -49,7 +49,7 @@ public class SinkTransformationTranslatorTest extends TestLogger {
 		DataStreamSink<Integer> dataStreamSink =
 				env.fromElements(1, 2).addSink(
 						TestSink.newBuilder()
-								.addWriter().build());
+								.addWriter().addCommitter().addGlobalCommitter().build());
 
 		StreamGraph streamGraph = env.getStreamGraph("test");
 		System.err.println(streamGraph.toString());
