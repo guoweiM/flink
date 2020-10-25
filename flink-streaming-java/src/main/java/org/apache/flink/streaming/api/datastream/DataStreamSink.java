@@ -61,7 +61,7 @@ public class DataStreamSink<T> {
 		if (transformation instanceof LegacySinkTransformation) {
 			return (LegacySinkTransformation<T>) transformation;
 		} else {
-			throw new IllegalStateException("This is not the LegacySinkTransformation.");
+			throw new IllegalStateException("There is no the LegacySinkTransformation.");
 		}
 	}
 

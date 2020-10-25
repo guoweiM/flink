@@ -18,40 +18,153 @@
 
 package org.apache.flink.streaming.api.graph;
 
-import org.apache.flink.api.connector.sink.Committer;
-import org.apache.flink.api.connector.sink.GlobalCommitter;
-import org.apache.flink.api.connector.sink.Sink;
-import org.apache.flink.api.connector.sink.Writer;
-import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
+import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.ChainingStrategy;
+import org.apache.flink.streaming.runtime.operators.sink.GlobalStreamingCommitterOperatorFactory;
+import org.apache.flink.streaming.runtime.operators.sink.StatelessWriterOperatorFactory;
+import org.apache.flink.streaming.runtime.operators.sink.StreamingCommitterOperatorFactory;
 import org.apache.flink.streaming.runtime.operators.sink.TestSink;
-import org.apache.flink.streaming.runtime.operators.sink.WriterOperatorTestBase;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  *
  */
 public class SinkTransformationTranslatorTest extends TestLogger {
 
+	static final String NAME = "FileSink";
+	static final String SLOT_SHARE_GROUP = "FileGroup";
+	static final String UID = "FileUid";
+	static final int PARALLELISM = 2;
+
 	@Test
 	public void generateWriterTopology() {
+		final StreamGraph streamGraph = buildGraph(TestSink.newBuilder()
+				.addWriter().build());
+
+		final StreamNode sourceNode = findNodeNameContains(streamGraph, "Source");
+		final StreamNode writerNode = findNodeNameContains(streamGraph, "Writer");
+
+		validateTopology(
+				sourceNode,
+				writerNode,
+				"Writer",
+				StatelessWriterOperatorFactory.class,
+				PARALLELISM);
+	}
+
+	@Test
+	public void generateWriterCommitterTopology() {
+
+		final StreamGraph streamGraph = buildGraph(TestSink.newBuilder().addWriter().addCommitter().build());
+
+		final StreamNode writerNode = findNodeNameContains(streamGraph, "Writer");
+		final StreamNode committerNode = findNodeNameContains(streamGraph, "Committer");
+
+		validateTopology(
+				writerNode,
+				committerNode,
+				"Committer",
+				StreamingCommitterOperatorFactory.class,
+				PARALLELISM);
+	}
+
+	@Test
+	public void generateCommitterGlobalCommitterTopology() {
+
+		final StreamGraph streamGraph = buildGraph(TestSink
+				.newBuilder()
+				.addWriter()
+				.addCommitter()
+				.addGlobalCommitter()
+				.build());
+
+		final StreamNode committerNode = findNodeNameContains(streamGraph, "Committer");
+		final StreamNode globalCommitterNode = findNodeNameContains(streamGraph, "Global Committer");
+
+		validateTopology(
+				committerNode,
+				globalCommitterNode,
+				"Global Committer",
+				GlobalStreamingCommitterOperatorFactory.class,
+				1);
+	}
+
+	@Test
+	public void generateWriterGlobalCommitterTopology() {
+		final StreamGraph streamGraph = buildGraph(TestSink
+				.newBuilder()
+				.addWriter()
+				.addGlobalCommitter()
+				.build());
+
+		final StreamNode writerNode = findNodeNameContains(streamGraph, "Writer");
+		final StreamNode globalCommitterNode = findNodeNameContains(streamGraph, "Global Committer");
+
+		validateTopology(
+				writerNode,
+				globalCommitterNode,
+				"Global Committer",
+				GlobalStreamingCommitterOperatorFactory.class,
+				1);
+	}
+
+	private void validateTopology(
+			StreamNode src,
+			StreamNode dest,
+			String midName,
+			Class<?> expectedOperatorFactory,
+			int expectedParallelism) {
+		assertThat(dest.getOperatorName(), equalTo(String.format("Sink %s: %s", midName, NAME)));
+		assertThat(
+				dest.getOperatorFactory(),
+				instanceOf(expectedOperatorFactory));
+		assertThat(
+				dest.getTransformationUID(),
+				equalTo(String.format("Sink %s %s", midName, UID)));
+		assertThat(dest.getParallelism(), equalTo(expectedParallelism));
+		assertThat(
+				dest.getOperatorFactory().getChainingStrategy(),
+				equalTo(ChainingStrategy.NEVER));
+		assertThat(dest.getSlotSharingGroup(), equalTo(SLOT_SHARE_GROUP));
+
+		final StreamEdge srcOutEdge = src.getOutEdges().get(0);
+		final StreamEdge destInputEdge = dest.getInEdges().get(0);
+
+		assertThat(srcOutEdge.getTargetId(), equalTo(dest.getId()));
+		assertThat(destInputEdge.getSourceId(), equalTo(src.getId()));
+		assertThat(dest.getOutEdges().size(), equalTo(0));
+	}
+
+	private StreamGraph buildGraph(TestSink sink) {
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		final DataStreamSource<Integer> src = env.fromElements(1, 2);
+		final DataStreamSink<Integer> dataStreamSink = src.addSink(sink);
+		setSinkProperty(dataStreamSink, PARALLELISM);
+		return env.getStreamGraph("test");
+	}
 
-		// This will throw exception because that lambda class(line TestSink::57)
-		// would has some reference which does not serializable
-		DataStreamSink<Integer> dataStreamSink =
-				env.fromElements(1, 2).addSink(
-						TestSink.newBuilder()
-								.addWriter().addCommitter().addGlobalCommitter().build());
+	private void setSinkProperty(DataStreamSink dataStreamSink, int parallelism) {
+		dataStreamSink.name(NAME);
+		dataStreamSink.uid(UID);
+		dataStreamSink.setParallelism(parallelism);
+		dataStreamSink.disableChaining();
+		dataStreamSink.slotSharingGroup(SLOT_SHARE_GROUP);
+	}
 
-		StreamGraph streamGraph = env.getStreamGraph("test");
-		System.err.println(streamGraph.toString());
+	private StreamNode findNodeNameContains(StreamGraph streamGraph, String name) {
+		return streamGraph
+				.getStreamNodes()
+				.stream()
+				.filter(x -> x.getOperatorName().contains(name))
+				.findFirst()
+				.orElseThrow(() -> new IllegalStateException("Can not find the node contains " + name));
 	}
 }

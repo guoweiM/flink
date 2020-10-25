@@ -94,5 +94,12 @@ public interface TransformationTranslator<OUT, T extends Transformation<OUT>> {
 		 * Retrieves additional configuration for the graph generation process.
 		 */
 		ReadableConfig getGraphGeneratorConfig();
+
+		/**
+		 * TODO:: java doc
+		 * @param transformation
+		 * @return
+		 */
+		Collection<Integer> translate(final Transformation<?> transformation);
 	}
 }

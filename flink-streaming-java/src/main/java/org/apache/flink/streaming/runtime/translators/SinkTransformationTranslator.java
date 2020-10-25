@@ -34,6 +34,7 @@ import org.apache.flink.streaming.runtime.operators.sink.StreamingCommitterOpera
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Optional;
 
 /**
  * TODO java doc.
@@ -60,34 +61,16 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 
 		//TODO:: we could get whether the writer and committer has the downstream from the two boolean
 
-		final boolean hasCommitter = transformation
-				.getSink()
-				.getCommittableSerializer()
-				.isPresent();
-		final boolean hasGlobalCommitter = transformation
-				.getSink()
-				.getGlobalCommittableSerializer()
-				.isPresent();
+		final OneInputTransformation<InputT, CommT> writer = translateStreamingWriter(transformation, context);
+		final Optional<OneInputTransformation<CommT, CommT>> committer = translateStreamingCommitter(writer, transformation, context);
 
-		final OneInputTransformation<InputT, CommT> writer =
-				createAndTranslateStreamingWriter(transformation, context);
+		committer.map()
+		createStreamingGlobalCommitter(committer == null ? writer : committer, transformation, context);
 
-		final OneInputTransformation<CommT, CommT> committer;
-		if (hasCommitter) {
-			committer = createAndTranslateStreamingCommitter(writer, transformation, context);
-		} else {
-			committer = null;
-		}
-		if (hasGlobalCommitter) {
-			createAndTranslateStreamingGlobalCommitter(
-					hasCommitter ? committer : writer,
-					transformation,
-					context);
-		}
 		return Collections.emptyList();
 	}
 
-	private OneInputTransformation<InputT, CommT> createAndTranslateStreamingWriter(
+	private OneInputTransformation<InputT, CommT> translateStreamingWriter(
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
 			Context context) {
 
@@ -119,18 +102,22 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 						new StatelessWriterOperatorFactory<>(sink),
 						committableTypeInfo,
 						parallelism));
-		inheritPropertiesFromSinkTransformation(writer, transformation);
-		final OneInputTransformationTranslator<InputT, CommT> writerTranslator = new OneInputTransformationTranslator<>();
-		writerTranslator.translateForStreaming(writer, context);
+		inheritPropertiesFromSinkTransformation("Writer", writer, transformation);
+		context.translate(writer);
 		return writer;
 	}
 
-	private OneInputTransformation<CommT, CommT> createAndTranslateStreamingCommitter(
+	private Optional<OneInputTransformation<CommT, CommT>> translateStreamingCommitter(
 			Transformation<CommT> input,
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
 			Context context) {
 
 		final Sink<InputT, CommT, WriterStateT, GlobalCommT> sink = transformation.getSink();
+
+		if (!sink.getCommittableSerializer().isPresent()) {
+			return Optional.empty();
+		}
+
 		final TypeInformation<CommT> committableTypeInfo = TypeExtractor.createTypeInfo(
 				Sink.class,
 				sink.getClass(),
@@ -145,33 +132,35 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 				new StreamingCommitterOperatorFactory<>(sink),
 				committableTypeInfo,
 				parallelism);
-		inheritPropertiesFromSinkTransformation(committer, transformation);
-		final OneInputTransformationTranslator<CommT, CommT> committerTranslator = new OneInputTransformationTranslator<>();
-		committerTranslator.translateForStreaming(committer, context);
-		return committer;
+		inheritPropertiesFromSinkTransformation("Committer", committer, transformation);
+		context.translate(committer);
+		return Optional.of(committer);
 	}
 
-	private OneInputTransformation<CommT, GlobalCommT> createAndTranslateStreamingGlobalCommitter(
+	private Optional<OneInputTransformation<CommT, GlobalCommT>> createStreamingGlobalCommitter(
 			Transformation<CommT> input,
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
 			Context context) {
 
+
 		final Sink<InputT, CommT, WriterStateT, GlobalCommT> sink = transformation.getSink();
 
+		if (!sink.getGlobalCommittableSerializer().isPresent()) {
+			return Optional.empty();
+		}
 		final OneInputTransformation<CommT, GlobalCommT> globalCommitter = new OneInputTransformation<>(
 				input,
 				"Sink Global Committer: " + transformation.getName(),
 				new GlobalStreamingCommitterOperatorFactory<>(sink),
 				null,
 				1);
-		final OneInputTransformationTranslator<CommT, GlobalCommT> globalCommitterTranslator =
-				new OneInputTransformationTranslator<>();
-		inheritPropertiesFromSinkTransformation(globalCommitter, transformation);
-		globalCommitterTranslator.translateForStreaming(globalCommitter, context);
-		return globalCommitter;
+		inheritPropertiesFromSinkTransformation("Global Committer", globalCommitter, transformation);
+		context.translate(globalCommitter);
+		return Optional.of(globalCommitter);
 	}
 
 	private void inheritPropertiesFromSinkTransformation(
+			String uidPrefix,
 			OneInputTransformation<?, ?> transformation,
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation) {
 
@@ -186,6 +175,12 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 		if (chainingStrategy != null) {
 			transformation.setChainingStrategy(chainingStrategy);
 		}
+
+		final String uid = sinkTransformation.getUid();
+		if (uid != null) {
+			transformation.setUid(String.format("Sink %s %s", uidPrefix, uid));
+		}
+
 	}
 
 	private int getParallelism(
