@@ -48,11 +48,12 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 	public void stateIsRestored() throws Exception {
 		final long initialTime = 0;
 
-		final OneInputStreamOperatorTestHarness<Integer, String> testHarness =
+		final OneInputStreamOperatorTestHarness<Integer, byte[]> testHarness =
 				createTestHarness(TestSink
 						.newBuilder()
 						.addWriter(new SnapshottingBufferingWriter())
 						.setWriterStateSerializer(SimpleVersionedStringSerializer.INSTANCE)
+						.addCommitter()
 						.build());
 
 		testHarness.open();
@@ -72,7 +73,7 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 
 		testHarness.close();
 
-		final OneInputStreamOperatorTestHarness<Integer, String> restoredTestHarness =
+		final OneInputStreamOperatorTestHarness<Integer, byte[]> restoredTestHarness =
 				createTestHarness(TestSink
 						.newBuilder()
 						.addWriter(new SnapshottingBufferingWriter())
