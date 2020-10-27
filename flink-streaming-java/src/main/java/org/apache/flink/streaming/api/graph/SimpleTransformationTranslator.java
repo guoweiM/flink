@@ -51,7 +51,9 @@ public abstract class SimpleTransformationTranslator<OUT, T extends Transformati
 	}
 
 	@Override
-	public Collection<Integer> translateForStreaming(final T transformation, final Context context) {
+	public Collection<Integer> translateForStreaming(
+			final T transformation,
+			final Context context) {
 		checkNotNull(transformation);
 		checkNotNull(context);
 
@@ -67,53 +69,48 @@ public abstract class SimpleTransformationTranslator<OUT, T extends Transformati
 	 *
 	 * @param transformation The transformation to be translated.
 	 * @param context The translation context.
+	 *
 	 * @return The ids of the "last" {@link StreamNode StreamNodes} in the transformation graph corresponding
-	 * to this transformation. These will be the nodes that a potential following transformation will need to
-	 * connect to.
+	 * 		to this transformation. These will be the nodes that a potential following transformation will need to
+	 * 		connect to.
 	 */
-	protected abstract Collection<Integer> translateForBatchInternal(final T transformation, final Context context);
+	protected abstract Collection<Integer> translateForBatchInternal(
+			final T transformation,
+			final Context context);
 
 	/**
 	 * Translates a given {@link Transformation} to its runtime implementation for STREAMING-style execution.
 	 *
 	 * @param transformation The transformation to be translated.
 	 * @param context The translation context.
+	 *
 	 * @return The ids of the "last" {@link StreamNode StreamNodes} in the transformation graph corresponding
-	 * to this transformation. These will be the nodes that a potential following transformation will need to
-	 * connect to.
+	 * 		to this transformation. These will be the nodes that a potential following transformation will need to
+	 * 		connect to.
 	 */
-	protected abstract Collection<Integer> translateForStreamingInternal(final T transformation, final Context context);
+	protected abstract Collection<Integer> translateForStreamingInternal(
+			final T transformation,
+			final Context context);
 
 	private void configure(final T transformation, final Context context) {
 		final StreamGraph streamGraph = context.getStreamGraph();
 		final int transformationId = transformation.getId();
 
-		if (transformation.getBufferTimeout() >= 0) {
-			streamGraph.setBufferTimeout(transformationId, transformation.getBufferTimeout());
-		} else {
-			streamGraph.setBufferTimeout(transformationId, context.getDefaultBufferTimeout());
-		}
-
 		if (transformation.getUid() != null) {
 			streamGraph.setTransformationUID(transformationId, transformation.getUid());
 		}
 		if (transformation.getUserProvidedNodeHash() != null) {
-			streamGraph.setTransformationUserHash(transformationId, transformation.getUserProvidedNodeHash());
+			streamGraph.setTransformationUserHash(
+					transformationId,
+					transformation.getUserProvidedNodeHash());
 		}
-
+		StreamGraphUtils.configureBufferTimeout(
+				streamGraph,
+				transformationId,
+				transformation,
+				context.getDefaultBufferTimeout());
 		StreamGraphUtils.validateTransformationUid(streamGraph, transformation);
 
-		if (transformation.getMinResources() != null && transformation.getPreferredResources() != null) {
-			streamGraph.setResources(transformationId, transformation.getMinResources(), transformation.getPreferredResources());
-		}
-
-		final StreamNode streamNode = streamGraph.getStreamNode(transformationId);
-		if (streamNode != null
-				&& streamNode.getManagedMemoryOperatorScopeUseCaseWeights().isEmpty()
-				&& streamNode.getManagedMemorySlotScopeUseCases().isEmpty()) {
-			streamNode.setManagedMemoryUseCaseWeights(
-					transformation.getManagedMemoryOperatorScopeUseCaseWeights(),
-					transformation.getManagedMemorySlotScopeUseCases());
-		}
+		StreamGraphUtils.configureResourceProperties(streamGraph, transformationId, transformation);
 	}
 }

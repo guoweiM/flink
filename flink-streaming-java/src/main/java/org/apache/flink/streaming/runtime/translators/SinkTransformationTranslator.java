@@ -55,8 +55,8 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 
 		StreamGraphUtils.validateTransformationUid(context.getStreamGraph(), transformation);
 
-		int writerId = addWriterNode(transformation, context);
-		int committerId = addCommitterNode(
+		int writerId = addWriter(transformation, context);
+		int committerId = addCommitter(
 				writerId,
 				transformation,
 				new BatchCommitterOperatorFactory<>(transformation.getSink()),
@@ -76,8 +76,8 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 
 		StreamGraphUtils.validateTransformationUid(context.getStreamGraph(), transformation);
 
-		int writerId = addWriterNode(transformation, context);
-		int committerId = addCommitterNode(
+		int writerId = addWriter(transformation, context);
+		int committerId = addCommitter(
 				writerId,
 				transformation,
 				new StreamingCommitterOperatorFactory<>(transformation.getSink()),
@@ -93,10 +93,12 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 
 	/**
 	 * Add a sink writer node to the stream graph.
+	 *
 	 * @param sinkTransformation The transformation that the writer belongs to
+	 *
 	 * @return The stream node id of the writer
 	 */
-	private int addWriterNode(
+	private int addWriter(
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation,
 			Context context) {
 		final boolean hasState = sinkTransformation
@@ -121,7 +123,7 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 				hasState ? new StatefulWriterOperatorFactory<>(sinkTransformation.getSink()) : new StatelessWriterOperatorFactory<>(
 						sinkTransformation.getSink());
 
-		return addOperatorToStreamGraph(
+		final int writerId = addOperatorToStreamGraph(
 				writer, input.getId(),
 				inputTypeInfo,
 				outTypeInfo,
@@ -129,18 +131,26 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 				parallelism,
 				sinkTransformation.getMaxParallelism(),
 				sinkTransformation,
-				context
-		);
+				context);
+
+		//TODO:: test it
+		StreamGraphUtils.configureResourceProperties(
+				context.getStreamGraph(),
+				writerId,
+				sinkTransformation);
+		return writerId;
 	}
 
 	/**
 	 * Try to add a sink committer to the stream graph.
+	 *
 	 * @param inputId The committer's input stream node id
 	 * @param sinkTransformation The transformation that the committer belongs to
 	 * @param committerFactory The committer operator's factory
+	 *
 	 * @return The stream node id of the committer or -1 if the sink topology does not include a committer.
 	 */
-	private int addCommitterNode(
+	private int addCommitter(
 			int inputId,
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation,
 			OneInputStreamOperatorFactory<CommT, CommT> committerFactory,
@@ -160,18 +170,19 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 		final int parallelism = getParallelism(sinkTransformation, context);
 
 		return addOperatorToStreamGraph(
-						committerFactory, inputId,
-						committableTypeInfo,
-						committableTypeInfo,
-						"Sink Committer:",
-						parallelism,
-						sinkTransformation.getMaxParallelism(),
-						sinkTransformation,
-						context);
+				committerFactory, inputId,
+				committableTypeInfo,
+				committableTypeInfo,
+				"Sink Committer:",
+				parallelism,
+				sinkTransformation.getMaxParallelism(),
+				sinkTransformation,
+				context);
 	}
 
 	/**
 	 * Try to add a sink global committer to the stream graph.
+	 *
 	 * @param inputId The global committer's input stream node id.
 	 * @param sinkTransformation The transformation that the global committer belongs to
 	 * @param globalCommitterFactory The global committer factory
@@ -256,19 +267,17 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 		streamGraph.setParallelism(transformationId, parallelism);
 		streamGraph.setMaxParallelism(transformationId, maxParallelism);
 
-		if (sinkTransformation.getBufferTimeout() >= 0) {
-			streamGraph.setBufferTimeout(transformationId, sinkTransformation.getBufferTimeout());
-		} else {
-			streamGraph.setBufferTimeout(transformationId, context.getDefaultBufferTimeout());
-		}
+		StreamGraphUtils.configureBufferTimeout(
+				streamGraph,
+				transformationId,
+				sinkTransformation,
+				context.getDefaultBufferTimeout());
 		if (sinkTransformation.getUid() != null) {
 			streamGraph.setTransformationUID(
 					transformationId,
 					String.format("%s %s", prefix, sinkTransformation.getUid()));
 		}
 		streamGraph.addEdge(inputId, transformationId, 0);
-
-		//TODO:: set resources
 
 		return transformationId;
 	}
