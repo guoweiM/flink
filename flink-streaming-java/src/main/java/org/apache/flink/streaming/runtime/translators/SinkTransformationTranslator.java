@@ -18,15 +18,17 @@
 
 package org.apache.flink.streaming.runtime.translators;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.connector.sink.Sink;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.streaming.api.graph.TransformationTranslator;
 import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
-import org.apache.flink.streaming.api.transformations.OneInputTransformation;
+import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 import org.apache.flink.streaming.api.transformations.SinkTransformation;
 import org.apache.flink.streaming.runtime.operators.sink.BatchCommitterOperatorFactory;
 import org.apache.flink.streaming.runtime.operators.sink.BatchGlobalCommitterOperatorFactory;
@@ -34,19 +36,15 @@ import org.apache.flink.streaming.runtime.operators.sink.GlobalStreamingCommitte
 import org.apache.flink.streaming.runtime.operators.sink.StatefulWriterOperatorFactory;
 import org.apache.flink.streaming.runtime.operators.sink.StatelessWriterOperatorFactory;
 import org.apache.flink.streaming.runtime.operators.sink.StreamingCommitterOperatorFactory;
+import org.apache.flink.streaming.util.graph.StreamGraphUtils;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Optional;
 
 /**
- * TODO java doc.
- *
- * @param <InputT>
- * @param <CommT>
- * @param <WriterStateT>
- * @param <GlobalCommT>
+ * A {@link TransformationTranslator} for the {@link SinkTransformation}.
  */
+@Internal
 public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCommT> implements
 		TransformationTranslator<Object, SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT>> {
 
@@ -55,20 +53,18 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
 			Context context) {
 
-		final Sink<InputT, CommT, WriterStateT, GlobalCommT> sink = transformation.getSink();
-		final OneInputTransformation<InputT, CommT> writer = translateWriter(
-				transformation,
-				context);
-		final Optional<OneInputTransformation<CommT, CommT>> committer = translateCommitter(
-				writer,
-				transformation,
-				new BatchCommitterOperatorFactory<>(sink),
-				context);
+		StreamGraphUtils.validateTransformationUid(context.getStreamGraph(), transformation);
 
-		translateGlobalCommitter(
-				committer.isPresent() ? committer.get() : writer,
+		int writerId = addWriterNode(transformation, context);
+		int committerId = addCommitterNode(
+				writerId,
 				transformation,
-				new BatchGlobalCommitterOperatorFactory<>(sink),
+				new BatchCommitterOperatorFactory<>(transformation.getSink()),
+				context);
+		addGlobalCommitter(
+				committerId >= 0 ? committerId : writerId,
+				transformation,
+				new BatchGlobalCommitterOperatorFactory<>(transformation.getSink()),
 				context);
 		return Collections.emptyList();
 	}
@@ -78,136 +74,134 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
 			Context context) {
 
-		final Sink<InputT, CommT, WriterStateT, GlobalCommT> sink = transformation.getSink();
-		final OneInputTransformation<InputT, CommT> writer = translateWriter(
-				transformation,
-				context);
-		final Optional<OneInputTransformation<CommT, CommT>> committer = translateCommitter(
-				writer,
-				transformation,
-				new StreamingCommitterOperatorFactory<>(sink),
-				context);
+		StreamGraphUtils.validateTransformationUid(context.getStreamGraph(), transformation);
 
-		translateGlobalCommitter(
-				committer.isPresent() ? committer.get() : writer,
+		int writerId = addWriterNode(transformation, context);
+		int committerId = addCommitterNode(
+				writerId,
 				transformation,
-				new GlobalStreamingCommitterOperatorFactory<>(sink),
+				new StreamingCommitterOperatorFactory<>(transformation.getSink()),
+				context);
+		addGlobalCommitter(
+				committerId >= 0 ? committerId : writerId,
+				transformation,
+				new GlobalStreamingCommitterOperatorFactory<>(transformation.getSink()),
 				context);
 
 		return Collections.emptyList();
 	}
 
-	private OneInputTransformation<InputT, CommT> translateWriter(
-			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
+	/**
+	 * Add a sink writer node to the stream graph.
+	 * @param sinkTransformation The transformation that the writer belongs to
+	 * @return The stream node id of the writer
+	 */
+	private int addWriterNode(
+			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation,
 			Context context) {
-
-		final String name = "Sink Writer: " + transformation.getName();
-		final TypeInformation<CommT> committableTypeInfo = TypeExtractor.createTypeInfo(
+		final boolean hasState = sinkTransformation
+				.getSink()
+				.getWriterStateSerializer()
+				.isPresent();
+		final TypeInformation<CommT> outTypeInfo = TypeExtractor.createTypeInfo(
 				Sink.class,
-				transformation.getSink().getClass(),
+				sinkTransformation.getSink().getClass(),
 				1,
 				null,
 				null);
 		@SuppressWarnings("unchecked")
-		final Transformation<InputT> input = (Transformation<InputT>) transformation
+		final Transformation<InputT> input = (Transformation<InputT>) sinkTransformation
 				.getInputs()
 				.get(0);
-		final int parallelism = getParallelism(transformation, context);
+		final TypeInformation<InputT> inputTypeInfo = input.getOutputType();
 
-		final OneInputTransformation<InputT, CommT> writer = transformation
-				.getSink()
-				.getWriterStateSerializer()
-				.map(s -> new OneInputTransformation<>(
-						input,
-						name,
-						new StatefulWriterOperatorFactory<>(transformation.getSink()),
-						committableTypeInfo,
-						parallelism))
-				.orElseGet(() -> new OneInputTransformation<>(
-						input,
-						name,
-						new StatelessWriterOperatorFactory<>(transformation.getSink()),
-						committableTypeInfo,
-						parallelism));
-		inheritPropertiesFromSinkTransformation("Writer", writer, transformation);
-		context.translate(writer);
-		return writer;
+		final int parallelism = getParallelism(sinkTransformation, context);
+
+		final StreamOperatorFactory<CommT> writer =
+				hasState ? new StatefulWriterOperatorFactory<>(sinkTransformation.getSink()) : new StatelessWriterOperatorFactory<>(
+						sinkTransformation.getSink());
+
+		return addOperatorToStreamGraph(
+				writer, input.getId(),
+				inputTypeInfo,
+				outTypeInfo,
+				"Sink Writer:",
+				parallelism,
+				sinkTransformation.getMaxParallelism(),
+				sinkTransformation,
+				context
+		);
 	}
 
-	private Optional<OneInputTransformation<CommT, CommT>> translateCommitter(
-			Transformation<CommT> input,
-			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
-			OneInputStreamOperatorFactory<CommT, CommT> operatorFactory,
+	/**
+	 * Try to add a sink committer to the stream graph.
+	 * @param inputId The committer's input stream node id
+	 * @param sinkTransformation The transformation that the committer belongs to
+	 * @param committerFactory The committer operator's factory
+	 * @return The stream node id of the committer or -1 if the sink topology does not include a committer.
+	 */
+	private int addCommitterNode(
+			int inputId,
+			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation,
+			OneInputStreamOperatorFactory<CommT, CommT> committerFactory,
 			Context context) {
 
-		if (!transformation.getSink().getCommittableSerializer().isPresent()) {
-			return Optional.empty();
+		if (!sinkTransformation.getSink().getCommittableSerializer().isPresent()) {
+			return -1;
 		}
 
 		final TypeInformation<CommT> committableTypeInfo = TypeExtractor.createTypeInfo(
 				Sink.class,
-				transformation.getSink().getClass(),
+				sinkTransformation.getSink().getClass(),
 				1,
 				null,
 				null);
 
-		final int parallelism = getParallelism(transformation, context);
+		final int parallelism = getParallelism(sinkTransformation, context);
 
-		final OneInputTransformation<CommT, CommT> committer = new OneInputTransformation<>(
-				input,
-				"Sink Committer: " + transformation.getName(),
-				operatorFactory,
-				committableTypeInfo,
-				parallelism);
-		inheritPropertiesFromSinkTransformation("Committer", committer, transformation);
-		context.translate(committer);
-		return Optional.of(committer);
+		return addOperatorToStreamGraph(
+						committerFactory, inputId,
+						committableTypeInfo,
+						committableTypeInfo,
+						"Sink Committer:",
+						parallelism,
+						sinkTransformation.getMaxParallelism(),
+						sinkTransformation,
+						context);
 	}
 
-	private void translateGlobalCommitter(
-			Transformation<CommT> input,
-			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> transformation,
-			OneInputStreamOperatorFactory<CommT, GlobalCommT> operatorFactory,
+	/**
+	 * Try to add a sink global committer to the stream graph.
+	 * @param inputId The global committer's input stream node id.
+	 * @param sinkTransformation The transformation that the global committer belongs to
+	 * @param globalCommitterFactory The global committer factory
+	 */
+	private void addGlobalCommitter(
+			int inputId,
+			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation,
+			OneInputStreamOperatorFactory<CommT, GlobalCommT> globalCommitterFactory,
 			Context context) {
 
-		if (!transformation.getSink().getGlobalCommittableSerializer().isPresent()) {
+		if (!sinkTransformation.getSink().getGlobalCommittableSerializer().isPresent()) {
 			return;
 		}
-		final OneInputTransformation<CommT, GlobalCommT> globalCommitter = new OneInputTransformation<>(
-				input,
-				"Sink Global Committer: " + transformation.getName(),
-				operatorFactory,
+
+		final TypeInformation<CommT> committableTypeInfo = TypeExtractor.createTypeInfo(
+				Sink.class,
+				sinkTransformation.getSink().getClass(),
+				1,
 				null,
-				1);
-		inheritPropertiesFromSinkTransformation(
-				"Global Committer",
-				globalCommitter,
-				transformation);
-		context.translate(globalCommitter);
-	}
+				null);
 
-	private void inheritPropertiesFromSinkTransformation(
-			String uidPrefix,
-			OneInputTransformation<?, ?> transformation,
-			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation) {
-
-		// currently we only inherit the properties that could be set from DataStreamSink
-
-		final String slotSharingGroup = sinkTransformation.getSlotSharingGroup();
-		if (slotSharingGroup != null) {
-			transformation.setSlotSharingGroup(slotSharingGroup);
-		}
-
-		final ChainingStrategy chainingStrategy = sinkTransformation.getChainingStrategy();
-		if (chainingStrategy != null) {
-			transformation.setChainingStrategy(chainingStrategy);
-		}
-
-		final String uid = sinkTransformation.getUid();
-		if (uid != null) {
-			transformation.setUid(String.format("Sink %s %s", uidPrefix, uid));
-		}
-
+		addOperatorToStreamGraph(
+				globalCommitterFactory, inputId,
+				committableTypeInfo,
+				null, // TODO:: fix after we know which output type is
+				"Sink Global Committer:",
+				1,
+				1,
+				sinkTransformation,
+				context);
 	}
 
 	private int getParallelism(
@@ -216,5 +210,66 @@ public class SinkTransformationTranslator<InputT, CommT, WriterStateT, GlobalCom
 		return sinkTransformation.getParallelism() != ExecutionConfig.PARALLELISM_DEFAULT
 				? sinkTransformation.getParallelism()
 				: context.getStreamGraph().getExecutionConfig().getParallelism();
+	}
+
+	/**
+	 * Add a operator to the {@link StreamGraph}.
+	 *
+	 * @param operatorFactory The operator factory
+	 * @param inputId The upstream stream node id of the operator
+	 * @param inTypeInfo The input type information of the operator
+	 * @param outTypInfo The output type information of the operator
+	 * @param prefix The prefix of the name and uid of the operator
+	 * @param parallelism The parallelism of the operator
+	 * @param maxParallelism The max parallelism of the operator
+	 * @param sinkTransformation The sink transformation which the operator belongs to
+	 *
+	 * @return The stream node id of the operator
+	 */
+	private <IN, OUT> int addOperatorToStreamGraph(
+			StreamOperatorFactory<OUT> operatorFactory, int inputId,
+			TypeInformation<IN> inTypeInfo,
+			TypeInformation<OUT> outTypInfo,
+			String prefix,
+			int parallelism,
+			int maxParallelism,
+			SinkTransformation<InputT, CommT, WriterStateT, GlobalCommT> sinkTransformation,
+			Context context) {
+		final StreamGraph streamGraph = context.getStreamGraph();
+		final String slotSharingGroup = context.getSlotSharingGroup();
+		final int transformationId = Transformation.getNewNodeId();
+
+		final ChainingStrategy chainingStrategy = sinkTransformation.getChainingStrategy();
+		if (chainingStrategy != null) {
+			operatorFactory.setChainingStrategy(chainingStrategy);
+		}
+
+		streamGraph.addOperator(
+				transformationId,
+				slotSharingGroup,
+				sinkTransformation.getCoLocationGroupKey(),
+				operatorFactory,
+				inTypeInfo,
+				outTypInfo,
+				String.format("%s %s", prefix, sinkTransformation.getName()));
+
+		streamGraph.setParallelism(transformationId, parallelism);
+		streamGraph.setMaxParallelism(transformationId, maxParallelism);
+
+		if (sinkTransformation.getBufferTimeout() >= 0) {
+			streamGraph.setBufferTimeout(transformationId, sinkTransformation.getBufferTimeout());
+		} else {
+			streamGraph.setBufferTimeout(transformationId, context.getDefaultBufferTimeout());
+		}
+		if (sinkTransformation.getUid() != null) {
+			streamGraph.setTransformationUID(
+					transformationId,
+					String.format("%s %s", prefix, sinkTransformation.getUid()));
+		}
+		streamGraph.addEdge(inputId, transformationId, 0);
+
+		//TODO:: set resources
+
+		return transformationId;
 	}
 }

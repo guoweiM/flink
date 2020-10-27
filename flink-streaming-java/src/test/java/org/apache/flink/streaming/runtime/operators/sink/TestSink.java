@@ -34,7 +34,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -157,7 +160,7 @@ public class TestSink implements Sink<Integer, String, String, String> {
 		}
 
 		/**
-		 * Using the {@link DefaultWriter}.
+		 * Add a {@link DefaultWriter}.
 		 */
 		public Builder addCommitter() {
 			this.committer = new DefaultCommitter();
@@ -165,8 +168,30 @@ public class TestSink implements Sink<Integer, String, String, String> {
 			return this;
 		}
 
+		/**
+		 * TODO java doc.
+		 * @param queueSupplier
+		 * @return
+		 */
+		public Builder addCommitter(Supplier<Queue<String>> queueSupplier) {
+			this.committer = new DefaultCommitter(queueSupplier);
+			this.committableSerializer = StringCommittableSerializer.INSTANCE;
+			return this;
+		}
+
 		public Builder addGlobalCommitter(GlobalCommitter<String, String> globalCommitter) {
 			this.globalCommitter = globalCommitter;
+			return this;
+		}
+
+		/**
+		 * TODO java doc.
+		 * @param queueSupplier
+		 * @return
+		 */
+		public Builder addGlobalCommitter(Supplier<Queue<String>> queueSupplier) {
+			this.globalCommitter = new DefaultGlobalCommitter(queueSupplier);
+			this.globalCommittableSerializer = StringCommittableSerializer.INSTANCE;
 			return this;
 		}
 
@@ -229,12 +254,15 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	}
 
 	/**
-	 * A {@link Writer} that pre-commit nothing.
+	 * A {@link Writer} that pre-commit all it received.
 	 */
 	static class DefaultWriter extends TestWriter {
+
 		@Override
 		public List<String> prepareCommit(boolean flush) {
-			return Collections.emptyList();
+			List<String> result = elements;
+			elements = new ArrayList<>();
+			return result;
 		}
 
 		@Override
@@ -250,17 +278,31 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	 */
 	static class TestCommitter implements Serializable {
 
-		protected List<String> committedData;
+		private Queue<String> committedData;
 
 		private boolean isClosed;
 
+		private Supplier<Queue<String>> queueSupplier;
+
 		public TestCommitter() {
-			this.committedData = new ArrayList<>();
+			this.committedData = new ConcurrentLinkedQueue<>();
+			this.isClosed = false;
+		}
+
+		public TestCommitter(Supplier<Queue<String>> queueSupplier) {
+			this.queueSupplier = queueSupplier;
 			this.isClosed = false;
 		}
 
 		public List<String> getCommittedData() {
-			return committedData;
+			return new ArrayList<>(committedData);
+		}
+
+		public void commitData(List<String> data) {
+			if (committedData == null) {
+				committedData = queueSupplier.get();
+			}
+			committedData.addAll(data);
 		}
 
 		public void close() throws Exception {
@@ -277,11 +319,17 @@ public class TestSink implements Sink<Integer, String, String, String> {
 	 */
 	static class DefaultCommitter extends TestCommitter implements Committer<String> {
 
+		public DefaultCommitter() {
+			super();
+		}
+
+		public DefaultCommitter(Supplier<Queue<String>> queueSupplier) {
+			super(queueSupplier);
+		}
+
 		@Override
 		public List<String> commit(List<String> committables) {
-			if (committedData != null) {
-				committedData.addAll(committables);
-			}
+			commitData(committables);
 			return Collections.emptyList();
 		}
 	}
@@ -308,6 +356,11 @@ public class TestSink implements Sink<Integer, String, String, String> {
 
 		private final String committedSuccessData;
 
+		DefaultGlobalCommitter(Supplier<Queue<String>> queueSupplier) {
+			super(queueSupplier);
+			committedSuccessData = "";
+		}
+
 		DefaultGlobalCommitter(String committedSuccessData) {
 			this.committedSuccessData = committedSuccessData;
 		}
@@ -325,20 +378,20 @@ public class TestSink implements Sink<Integer, String, String, String> {
 
 		@Override
 		public String combine(List<String> committables) {
+			//we sort here because we want to have a deterministic result during the unit test
+			Collections.sort(committables);
 			return COMBINER.apply(committables);
 		}
 
 		@Override
 		public List<String> commit(List<String> globalCommittables) {
-			if (committedData != null) {
-				committedData.addAll(globalCommittables);
-			}
+			commitData(globalCommittables);
 			return Collections.emptyList();
 		}
 
 		@Override
 		public void endOfInput() {
-			this.committedData.add("end of input");
+			commitData(Collections.singletonList("end of input"));
 		}
 	}
 
