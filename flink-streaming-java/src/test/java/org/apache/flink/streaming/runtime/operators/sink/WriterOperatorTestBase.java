@@ -24,13 +24,8 @@ import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
-import org.apache.flink.streaming.util.StreamRecordMatchers;
 import org.apache.flink.util.TestLogger;
 
-import org.hamcrest.Matcher;
-import org.hamcrest.collection.IsIterableContainingInAnyOrder;
-import org.hamcrest.collection.IsIterableContainingInOrder;
-import org.hamcrest.core.IsEqual;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -38,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.flink.streaming.util.SinkTestUtil.containStreamElements;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
 
@@ -220,44 +216,7 @@ public abstract class WriterOperatorTestBase extends TestLogger {
 		}
 	}
 
-	//TODO:: move to util
-	@SuppressWarnings({"unchecked", "rawtypes"})
-	public static org.hamcrest.Matcher<java.lang.Iterable<?>> containStreamElements(Object... items) {
-		List<Matcher<?>> matchers = new ArrayList<>();
-		for (Object item : items) {
-			if (item instanceof Watermark) {
-				matchers.add(IsEqual.equalTo(item));
-			}
-			if (item instanceof StreamRecord) {
-				StreamRecord<byte[]> streamRecord = (StreamRecord<byte[]>) item;
-				matchers.add(StreamRecordMatchers.streamRecord(
-						streamRecord.getValue(),
-						streamRecord.getTimestamp()));
-			}
-		}
-
-		return new IsIterableContainingInOrder(matchers);
-	}
-
-	@SuppressWarnings({"unchecked", "rawtypes"})
-	public static org.hamcrest.Matcher<java.lang.Iterable<?>> containsStreamElementsInAnyOrder(Object... items) {
-		List<Matcher<?>> matchers = new ArrayList<>();
-		for (Object item : items) {
-			if (item instanceof Watermark) {
-				matchers.add(IsEqual.equalTo(item));
-			}
-			if (item instanceof StreamRecord) {
-				StreamRecord<byte[]> streamRecord = (StreamRecord<byte[]>) item;
-				matchers.add(StreamRecordMatchers.streamRecord(
-						streamRecord.getValue(),
-						streamRecord.getTimestamp()));
-			}
-		}
-
-		return new IsIterableContainingInAnyOrder(matchers);
-	}
-
-	public StreamRecord<byte[]> createStreamRecord(Tuple3<Integer, Long, Long> tuple3) throws IOException {
+	static StreamRecord<byte[]> createStreamRecord(Tuple3<Integer, Long, Long> tuple3) throws IOException {
 		return new StreamRecord<>(TestSink.StringCommittableSerializer.INSTANCE.serialize(tuple3.toString()));
 	}
 

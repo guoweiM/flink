@@ -25,7 +25,6 @@ import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.util.TestLogger;
-import org.apache.flink.util.function.FunctionUtils;
 
 import org.junit.Test;
 
@@ -34,10 +33,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.streaming.util.SinkTestUtil.convertStringListToByteArrayList;
 import static org.apache.flink.streaming.util.TestHarnessUtil.buildSubtaskState;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertTrue;
 
@@ -97,15 +98,15 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 	public void restoredFromMergedState() throws Exception {
 
 		final List<String> stringInput1 = Arrays.asList("host", "drop");
-		final List<byte[]> byteInput1 = convertStringListToByteArrayList(Arrays.asList(
-				"host",
-				"drop"));
+		final List<String> stringInput2 = Arrays.asList("future", "evil", "how");
+
+		final List<byte[]> byteInput1 = convertStringListToByteArrayList(stringInput1);
+		final List<byte[]> byteInput2 = convertStringListToByteArrayList(stringInput2);
+
 		final OperatorSubtaskState operatorSubtaskState1 = buildSubtaskState(
 				createTestHarness(),
 				byteInput1);
 
-		final List<String> stringInput2 = Arrays.asList("future", "evil", "how");
-		final List<byte[]> byteInput2 = convertStringListToByteArrayList(stringInput2);
 		final OperatorSubtaskState operatorSubtaskState2 = buildSubtaskState(
 				createTestHarness(),
 				byteInput2);
@@ -129,20 +130,16 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 		expectedStringOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(stringInput1));
 		expectedStringOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(stringInput2));
 
-		final List<byte[]> expectedOutput = convertStringListToByteArrayList(expectedStringOutput);
 
 		testHarness.snapshot(1L, 1L);
 		testHarness.notifyOfCompletedCheckpoint(1L);
 		testHarness.close();
 
-		// TODO:: maybe there is no output at all
-		assertThat(
-				testHarness.getOutput(),
-				containsInAnyOrder(expectedOutput.stream().map(StreamRecord::new).toArray()));
+		assertThat(testHarness.getOutput().size(), equalTo(0));
 
 		assertThat(
 				globalCommitter.getCommittedData(),
-				containsInAnyOrder(expectedOutput.toArray()));
+				containsInAnyOrder(expectedStringOutput.toArray()));
 	}
 
 	@Test
@@ -164,9 +161,6 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 		expectedStringOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(stringInput1));
 		expectedStringOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(stringInput2));
 		expectedStringOutput.add(TestSink.DefaultGlobalCommitter.COMBINER.apply(stringInput3));
-
-		final List<byte[]> expectedByteOutput = convertStringListToByteArrayList(
-				expectedStringOutput);
 
 		final OneInputStreamOperatorTestHarness<byte[], byte[]> testHarness = createTestHarness(
 				globalCommitter);
@@ -193,13 +187,11 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 
 		testHarness.close();
 
-		assertThat(
-				testHarness.getOutput(),
-				containsInAnyOrder(expectedByteOutput.stream().map(StreamRecord::new).toArray()));
+		assertThat(testHarness.getOutput().size(), equalTo(0));
 
 		assertThat(
 				globalCommitter.getCommittedData(),
-				containsInAnyOrder(expectedByteOutput.toArray()));
+				containsInAnyOrder(expectedStringOutput.toArray()));
 	}
 
 	@Test
@@ -264,17 +256,10 @@ public class GlobalStreamingCommitterOperatorTest extends TestLogger {
 				new GlobalStreamingCommitterOperatorFactory<>(TestSink
 						.newBuilder()
 						.addWriter()
+						.setCommittableSerializer(TestSink.StringCommittableSerializer.INSTANCE)
 						.addGlobalCommitter(globalCommitter)
 						.setGlobalCommittableSerializer(serializer)
 						.build()),
 				BytePrimitiveArraySerializer.INSTANCE);
-	}
-
-	List<byte[]> convertStringListToByteArrayList(List<String> input) {
-		return input
-				.stream()
-				.map(FunctionUtils.uncheckedFunction(TestSink.StringCommittableSerializer.INSTANCE::serialize))
-				.collect(
-						Collectors.toList());
 	}
 }

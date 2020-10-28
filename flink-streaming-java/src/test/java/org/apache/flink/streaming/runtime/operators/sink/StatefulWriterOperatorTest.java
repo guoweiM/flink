@@ -24,6 +24,7 @@ import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.SimpleVersionedStringSerializer;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.SinkTestUtil;
 
 import org.junit.Test;
 
@@ -66,7 +67,7 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 		// we only see the watermark, so the committables must be stored in state
 		assertThat(
 				testHarness.getOutput(),
-				containStreamElements(
+				SinkTestUtil.containStreamElements(
 						new Watermark(initialTime)));
 
 		testHarness.close();
@@ -87,7 +88,7 @@ public class StatefulWriterOperatorTest extends WriterOperatorTestBase {
 
 		assertThat(
 				restoredTestHarness.getOutput(),
-				containStreamElements(
+				SinkTestUtil.containStreamElements(
 						createStreamRecord(Tuple3.of(1, initialTime + 1, initialTime)),
 						createStreamRecord(Tuple3.of(2, initialTime + 2, initialTime))));
 	}
