@@ -28,8 +28,12 @@ import org.apache.flink.streaming.api.operators.InternalTimerService;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeCallback;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 
 import java.util.List;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * Abstract base class for operators that work with a {@link SinkWriter}.
@@ -42,12 +46,17 @@ import java.util.List;
  */
 @Internal
 abstract class AbstractSinkWriterOperator<InputT, CommT> extends AbstractStreamOperator<CommT>
-	implements OneInputStreamOperator<InputT, CommT>, BoundedOneInput {
+		implements OneInputStreamOperator<InputT, CommT>, BoundedOneInput, ProcessingTimeCallback {
 
 	private static final long serialVersionUID = 1L;
 
 	/** The runtime information of the input element. */
 	private final Context<InputT> context;
+
+	/** User can use to register a processing timer when calling {@link SinkWriter#onTimer(long, SinkWriter.OnTimerContext)}. */
+	private final OnTimerContext onTimerContext;
+
+	private final ProcessingTimeService processingTimeService;
 
 	// ------------------------------- runtime fields ---------------------------------------
 
@@ -57,8 +66,10 @@ abstract class AbstractSinkWriterOperator<InputT, CommT> extends AbstractStreamO
 	/** The sink writer that does most of the work. */
 	protected SinkWriter<InputT, CommT, ?> sinkWriter;
 
-	AbstractSinkWriterOperator() {
+	AbstractSinkWriterOperator(ProcessingTimeService processingTimeService) {
+		this.processingTimeService = checkNotNull(processingTimeService);
 		this.context = new Context<>();
+		this.onTimerContext = new OnTimerContext();
 	}
 
 	@Override
@@ -99,6 +110,10 @@ abstract class AbstractSinkWriterOperator<InputT, CommT> extends AbstractStreamO
 		sinkWriter.close();
 	}
 
+	public void onProcessingTime(long timestamp) throws Exception {
+		sinkWriter.onTimer(timestamp, onTimerContext);
+	}
+
 	protected Sink.InitContext createInitContext() {
 		return new Sink.InitContext() {
 			@Override
@@ -131,6 +146,11 @@ abstract class AbstractSinkWriterOperator<InputT, CommT> extends AbstractStreamO
 		private StreamRecord<IN> element;
 
 		@Override
+		public void registerProcessingTimer(long time) {
+			processingTimeService.registerTimer(time, AbstractSinkWriterOperator.this);
+		}
+
+		@Override
 		public long currentWatermark() {
 			return currentWatermark;
 		}
@@ -141,6 +161,14 @@ abstract class AbstractSinkWriterOperator<InputT, CommT> extends AbstractStreamO
 				return element.getTimestamp();
 			}
 			return null;
+		}
+	}
+
+	private class OnTimerContext implements SinkWriter.OnTimerContext {
+
+		@Override
+		public void registerProcessingTimer(long time) {
+			processingTimeService.registerTimer(time, AbstractSinkWriterOperator.this);
 		}
 	}
 }
