@@ -18,6 +18,7 @@
 
 package org.apache.flink.streaming.runtime.streamrecord;
 
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
@@ -39,7 +40,31 @@ import static org.mockito.Mockito.when;
 /**
  * Tests for {@link StreamElementSerializer}.
  */
-public class StreamElementSerializerTest {
+public class StreamElementSerializerTest extends SerializerTestBase<StreamElement> {
+
+	@Override
+	protected TypeSerializer<StreamElement> createSerializer() {
+		return new StreamElementSerializer<>(StringSerializer.INSTANCE);
+	}
+
+	@Override
+	protected int getLength() {
+		return -1;
+	}
+
+	@Override
+	protected Class<StreamElement> getTypeClass() {
+		return StreamElement.class;
+	}
+
+	@Override
+	protected StreamElement[] getTestData() {
+		return new StreamElement[]{
+				new StreamRecord<>("stream element serializer test"),
+				new StreamRecord<>("stream element serializer data", 11L),
+				new StreamRecord<>("stream element serializer record", Long.MIN_VALUE)
+		};
+	}
 
 	@Test
 	public void testDeepDuplication() {
