@@ -19,7 +19,9 @@
 package org.apache.flink.api.java.typeutils.runtime;
 
 import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.SerializerTestInstance;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.api.java.typeutils.WritableTypeInfo;
 
@@ -28,7 +30,31 @@ import org.junit.Test;
 /**
  * Tests for the {@link WritableSerializer}.
  */
-public class WritableSerializerTest {
+public class WritableSerializerTest extends SerializerTestBase<StringArrayWritable> {
+
+	@Override
+	protected TypeSerializer<StringArrayWritable> createSerializer() {
+		return new WritableSerializer<>(StringArrayWritable.class);
+	}
+
+	@Override
+	protected int getLength() {
+		return -1;
+	}
+
+	@Override
+	protected Class<StringArrayWritable> getTypeClass() {
+		return StringArrayWritable.class;
+	}
+
+	@Override
+	protected StringArrayWritable[] getTestData() {
+		return new StringArrayWritable[]{
+				new StringArrayWritable(new String[]{}),
+				new StringArrayWritable(new String[]{"a"}),
+				new StringArrayWritable(new String[]{"b", "c"})
+		};
+	}
 
 	@Test
 	public void testStringArrayWritable() {

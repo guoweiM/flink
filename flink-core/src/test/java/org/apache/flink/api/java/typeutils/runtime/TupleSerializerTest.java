@@ -23,8 +23,10 @@ import java.util.ArrayList;
 import java.util.Random;
 
 import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.SerializerTestInstance;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.base.IntSerializer;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple0;
 import org.apache.flink.api.java.tuple.Tuple1;
@@ -41,7 +43,30 @@ import org.apache.flink.util.StringUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class TupleSerializerTest {
+public class TupleSerializerTest extends SerializerTestBase<Tuple1<Integer>> {
+
+	@SuppressWarnings("unchecked")
+	@Override
+	protected TypeSerializer<Tuple1<Integer>> createSerializer() {
+		return new TupleSerializer<>((Class<Tuple1<Integer>>) (Class<?>) Tuple1.class, new TypeSerializer[]{IntSerializer.INSTANCE});
+	}
+
+	@Override
+	protected int getLength() {
+		return 4;
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	protected Class<Tuple1<Integer>> getTypeClass() {
+		return (Class<Tuple1<Integer>>) (Class<?>) Tuple1.class;
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	protected Tuple1<Integer>[] getTestData() {
+		return new Tuple1[]{new Tuple1<>(1), new Tuple1<>(3), new Tuple1<>(5)};
+	}
 
 	@Test
 	public void testTuple0() {

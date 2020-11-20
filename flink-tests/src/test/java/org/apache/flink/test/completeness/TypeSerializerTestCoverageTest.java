@@ -51,10 +51,14 @@ public class TypeSerializerTestCoverageTest extends TestLogger {
 		// check if a test exists for each type serializer
 		for (Class<? extends TypeSerializer> typeSerializer : typeSerializers) {
 			// we skip abstract classes and inner classes to skip type serializer defined in test classes
-			if (Modifier.isAbstract(typeSerializer.getModifiers()) || Modifier.isPrivate(typeSerializer.getModifiers()) ||
-					typeSerializer.getName().contains("Test") || typeSerializer.getName().contains("$") ||
-					typeSerializer.getName().contains("state") || typeSerializer.getName().contains("typeutils") ||
+			if (Modifier.isAbstract(typeSerializer.getModifiers()) ||
+					Modifier.isPrivate(typeSerializer.getModifiers()) ||
+					typeSerializer.getName().contains("Test") ||
+					typeSerializer.getName().contains("ITCase") ||
+					typeSerializer.getName().contains("$") ||
 					typeSerializer.getName().contains("testutils") ||
+					typeSerializer.getName().contains("typeutils") ||
+					typeSerializer.getName().contains("state") ||
 					typeSerializer.getName().contains("TypeSerializerProxy") ||
 					typeSerializer.getName().contains("KeyAndValueSerializer")) {
 				continue;

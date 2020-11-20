@@ -20,15 +20,13 @@ package org.apache.flink.api.java.typeutils.runtime;
 
 import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.api.common.typeutils.base.IntSerializer;
-import org.apache.flink.api.common.typeutils.base.StringSerializer;
-import org.apache.flink.types.Either;
 
-public class EitherSerializerCommonTest extends SerializerTestBase<Either<String, Integer>> {
+import java.util.UUID;
 
+public class ValueSerializerTest extends SerializerTestBase<ValueID> {
 	@Override
-	protected TypeSerializer<Either<String, Integer>> createSerializer() {
-		return new EitherSerializer<>(StringSerializer.INSTANCE, IntSerializer.INSTANCE);
+	protected TypeSerializer<ValueID> createSerializer() {
+		return new ValueSerializer<>(ValueID.class);
 	}
 
 	@Override
@@ -36,22 +34,17 @@ public class EitherSerializerCommonTest extends SerializerTestBase<Either<String
 		return -1;
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
-	protected Class<Either<String, Integer>> getTypeClass() {
-		return (Class<Either<String, Integer>>) (Class<?>) Either.class;
+	protected Class<ValueID> getTypeClass() {
+		return ValueID.class;
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	protected Either<String, Integer>[] getTestData() {
-		return new Either[] {
-				new Either.Left("hello friend"),
-				new Either.Left("hello friend"),
-				new Either.Right(37),
-				new Either.Left("hello friend"),
-				new Either.Right(1569653),
-				new Either.Left("hello friend")
+	protected ValueID[] getTestData() {
+		return new ValueID[] {
+			new ValueID(new UUID(0, 0)),
+			new ValueID(new UUID(1, 0)),
+			new ValueID(new UUID(1, 1))
 		};
 	}
 }

@@ -22,8 +22,11 @@ import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeutils.ComparatorTestBase.TestInputView;
 import org.apache.flink.api.common.typeutils.ComparatorTestBase.TestOutputView;
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.SerializerTestInstance;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.base.IntSerializer;
+import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.EitherTypeInfo;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
@@ -42,7 +45,36 @@ import static org.apache.flink.types.Either.Right;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
-public class EitherSerializerTest {
+public class EitherSerializerTest extends SerializerTestBase<Either<String, Integer>> {
+
+	@Override
+	protected TypeSerializer<Either<String, Integer>> createSerializer() {
+		return new EitherSerializer<>(StringSerializer.INSTANCE, IntSerializer.INSTANCE);
+	}
+
+	@Override
+	protected int getLength() {
+		return -1;
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	protected Class<Either<String, Integer>> getTypeClass() {
+		return (Class<Either<String, Integer>>) (Class<?>) Either.class;
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	protected Either<String, Integer>[] getTestData() {
+		return new Either[] {
+				new Either.Left<>("hello friend"),
+				new Either.Left<>("hello friend"),
+				new Either.Right<>(37),
+				new Either.Left<>("hello friend"),
+				new Either.Right<>(1569653),
+				new Either.Left<>("hello friend")
+		};
+	}
 
 	@SuppressWarnings("unchecked")
 	@Test
@@ -157,38 +189,41 @@ public class EitherSerializerTest {
 	}
 
 	@Test
-	public void testSerializeIndividually() throws IOException {
-		EitherTypeInfo<LongValue, DoubleValue> eitherTypeInfo = new EitherTypeInfo<>(
-			ValueTypeInfo.LONG_VALUE_TYPE_INFO, ValueTypeInfo.DOUBLE_VALUE_TYPE_INFO);
-		EitherSerializer<LongValue, DoubleValue> eitherSerializer =
-			(EitherSerializer<LongValue, DoubleValue>) eitherTypeInfo.createSerializer(new ExecutionConfig());
+	public void testSerializeIndividually() {
+		try {
+			EitherTypeInfo<LongValue, DoubleValue> eitherTypeInfo = new EitherTypeInfo<>(
+					ValueTypeInfo.LONG_VALUE_TYPE_INFO, ValueTypeInfo.DOUBLE_VALUE_TYPE_INFO);
+			EitherSerializer<LongValue, DoubleValue> eitherSerializer =
+					(EitherSerializer<LongValue, DoubleValue>) eitherTypeInfo.createSerializer(new ExecutionConfig());
 
-		LongValue lv = new LongValue();
-		DoubleValue dv = new DoubleValue();
+			LongValue lv = new LongValue();
+			DoubleValue dv = new DoubleValue();
 
-		Either<LongValue, DoubleValue> left = Left(lv);
-		Either<LongValue, DoubleValue> right = Right(dv);
+			Either<LongValue, DoubleValue> left = Left(lv);
+			Either<LongValue, DoubleValue> right = Right(dv);
 
-		TestOutputView out = new TestOutputView();
-		eitherSerializer.serialize(left, out);
-		eitherSerializer.serialize(right, out);
-		eitherSerializer.serialize(left, out);
+			TestOutputView out = new TestOutputView();
+			eitherSerializer.serialize(left, out);
+			eitherSerializer.serialize(right, out);
+			eitherSerializer.serialize(left, out);
 
-		TestInputView in = out.getInputView();
-		// the first deserialization creates a new instance of Left
-		Either<LongValue, DoubleValue> copy0 = eitherSerializer.deserialize(right, in);
+			TestInputView in = out.getInputView();
+			// the first deserialization creates a new instance of Left
+			Either<LongValue, DoubleValue> copy0 = eitherSerializer.deserialize(right, in);
 
-		// then the cross-references are used for future copies
-		Either<LongValue, DoubleValue> copy1 = eitherSerializer.deserialize(copy0, in);
-		Either<LongValue, DoubleValue> copy2 = eitherSerializer.deserialize(copy1, in);
+			// then the cross-references are used for future copies
+			Either<LongValue, DoubleValue> copy1 = eitherSerializer.deserialize(copy0, in);
+			Either<LongValue, DoubleValue> copy2 = eitherSerializer.deserialize(copy1, in);
 
-		// validate reference equality
-		assertSame(right, copy1);
-		assertSame(copy0, copy2);
+			// validate reference equality
+			assertSame(right, copy1);
+			assertSame(copy0, copy2);
 
-		// validate reference equality of contained objects
-		assertSame(right.right(), copy1.right());
-		assertSame(copy0.left(), copy2.left());
+			// validate reference equality of contained objects
+			assertSame(right.right(), copy1.right());
+			assertSame(copy0.left(), copy2.left());
+		} catch (IOException ignored) {
+		}
 	}
 
 	/**

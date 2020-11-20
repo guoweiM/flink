@@ -20,8 +20,10 @@ package org.apache.flink.api.java.typeutils.runtime;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.SerializerTestInstance;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.base.IntSerializer;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
@@ -34,7 +36,38 @@ import org.junit.Test;
 import java.io.Serializable;
 import java.util.Objects;
 
-public class RowSerializerTest {
+public class RowSerializerTest extends SerializerTestBase<Row> {
+
+	@Override
+	protected TypeSerializer<Row> createSerializer() {
+		return new RowSerializer(new TypeSerializer[]{IntSerializer.INSTANCE});
+	}
+
+	@Override
+	protected int getLength() {
+		return -1;
+	}
+
+	@Override
+	protected Class<Row> getTypeClass() {
+		return Row.class;
+	}
+
+	@Override
+	protected Row[] getTestData() {
+		Row row1 = new Row(1);
+		row1.setKind(RowKind.INSERT);
+		row1.setField(0, 1);
+
+		Row row2 = new Row(1);
+		row2.setKind(RowKind.UPDATE_BEFORE);
+		row2.setField(0, 2);
+
+		Row row3 = new Row(1);
+		row3.setKind(RowKind.UPDATE_AFTER);
+		row3.setField(0, 3);
+		return new Row[]{row1, row2, row3};
+	}
 
 	@Test
 	public void testRowSerializer() {

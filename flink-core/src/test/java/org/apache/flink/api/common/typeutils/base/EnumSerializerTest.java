@@ -18,14 +18,15 @@
 
 package org.apache.flink.api.common.typeutils.base;
 
+import org.apache.flink.api.common.typeutils.SerializerTestBase;
 import org.apache.flink.api.common.typeutils.SerializerTestInstance;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerSchemaCompatibility;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshotSerializationUtil;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
 import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 import org.apache.flink.util.InstantiationUtil;
-import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
 
@@ -36,15 +37,35 @@ import java.util.Arrays;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class EnumSerializerTest extends TestLogger {
+public class EnumSerializerTest extends SerializerTestBase<EnumSerializerTest.PublicEnum> {
 
-	@Test
-	public void testPublicEnum() {
-		testEnumSerializer(PrivateEnum.ONE, PrivateEnum.TWO, PrivateEnum.THREE);
+	@Override
+	protected TypeSerializer<PublicEnum> createSerializer() {
+		return new EnumSerializer<>(PublicEnum.class);
+	}
+
+	@Override
+	protected int getLength() {
+		return 4;
+	}
+
+	@Override
+	protected Class<PublicEnum> getTypeClass() {
+		return PublicEnum.class;
+	}
+
+	@Override
+	protected PublicEnum[] getTestData() {
+		return new PublicEnum[]{PublicEnum.FOO, PublicEnum.BAR};
 	}
 
 	@Test
 	public void testPrivateEnum() {
+		testEnumSerializer(PrivateEnum.ONE, PrivateEnum.TWO, PrivateEnum.THREE);
+	}
+
+	@Test
+	public void testPublicEnum() {
 		testEnumSerializer(PublicEnum.FOO, PublicEnum.BAR, PublicEnum.PETER, PublicEnum.NATHANIEL,
 				PublicEnum.EMMA, PublicEnum.PAULA);
 	}
