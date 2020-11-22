@@ -27,6 +27,8 @@ import org.junit.Test;
 import org.reflections.Reflections;
 
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -37,16 +39,35 @@ import static org.junit.Assert.fail;
  */
 public class TypeSerializerTestCoverageTest extends TestLogger {
 
+	/** Following already covered by the {@link org.apache.flink.api.common.typeutils.base.BasicTypeSerializerUpgradeTest}. */
+	static final Set<String> ALREADY_COVERED_SET1 = new HashSet<>(Arrays.asList(
+			"org.apache.flink.api.common.typeutils.base.CharValueSerializer",
+			"org.apache.flink.api.common.typeutils.base.DateSerializer",
+			"org.apache.flink.api.common.typeutils.base.CharSerializer"));
+
+	static final Set<String> NEED_TO_FIX = new HashSet<>(Arrays.asList("org.apache.flink.api.scala.typeutils.UnitSerializer"));
+
+	static final Set<String> WHITE_NAME_LIST_OF_UPGRADE_TEST = new HashSet<>(ALREADY_COVERED_SET1);
+
+	static final Set<String> WHITE_NAME_LIST_OF_SERIALIZER_TEST = new HashSet<>(NEED_TO_FIX);
+
 	@Test
 	public void testTypeSerializerTestCoverage() {
 		final Reflections reflections = new Reflections("org.apache.flink");
 
-		final Set<Class<? extends TypeSerializer>> typeSerializers = reflections.getSubTypesOf(TypeSerializer.class);
+		final Set<Class<? extends TypeSerializer>> typeSerializers = reflections.getSubTypesOf(
+				TypeSerializer.class);
 
-		final Set<String> typeSerializerTestNames = reflections.getSubTypesOf(SerializerTestBase.class)
-				.stream().map(Class::getName).collect(Collectors.toSet());
-		final Set<String> typeSerializerUpgradeTestNames = reflections.getSubTypesOf(TypeSerializerUpgradeTestBase.class)
-				.stream().map(Class::getName).collect(Collectors.toSet());
+		final Set<String> typeSerializerTestNames = reflections
+				.getSubTypesOf(SerializerTestBase.class)
+				.stream()
+				.map(Class::getName)
+				.collect(Collectors.toSet());
+		final Set<String> typeSerializerUpgradeTestNames = reflections
+				.getSubTypesOf(TypeSerializerUpgradeTestBase.class)
+				.stream()
+				.map(Class::getName)
+				.collect(Collectors.toSet());
 
 		// check if a test exists for each type serializer
 		for (Class<? extends TypeSerializer> typeSerializer : typeSerializers) {
@@ -57,7 +78,7 @@ public class TypeSerializerTestCoverageTest extends TestLogger {
 					typeSerializer.getName().contains("ITCase") ||
 					typeSerializer.getName().contains("$") ||
 					typeSerializer.getName().contains("testutils") ||
-					typeSerializer.getName().contains("typeutils") ||
+//					typeSerializer.getName().contains("typeutils") ||
 					typeSerializer.getName().contains("state") ||
 					typeSerializer.getName().contains("TypeSerializerProxy") ||
 					typeSerializer.getName().contains("KeyAndValueSerializer")) {
@@ -65,13 +86,18 @@ public class TypeSerializerTestCoverageTest extends TestLogger {
 			}
 
 			final String testToFind = typeSerializer.getName() + "Test";
-			if (!typeSerializerTestNames.contains(testToFind)) {
-				fail("Could not find test '" + testToFind + "' that covers '" + typeSerializer.getName() + "'.");
+			if (!typeSerializerTestNames.contains(testToFind) && !WHITE_NAME_LIST_OF_SERIALIZER_TEST
+					.contains(typeSerializer.getName())) {
+				fail("Could not find test '" + testToFind + "' that covers '"
+						+ typeSerializer.getName() + "'.");
 			}
 
 			final String upgradeTestToFind = typeSerializer.getName() + "UpgradeTest";
-			if (!typeSerializerUpgradeTestNames.contains(upgradeTestToFind)) {
-				fail("Could not find upgrade test '" + upgradeTestToFind + "' that covers '" + typeSerializer.getName() + "'.");
+			if (!typeSerializerUpgradeTestNames.contains(upgradeTestToFind)
+					&& !WHITE_NAME_LIST_OF_UPGRADE_TEST
+					.contains(typeSerializer.getName())) {
+				fail("Could not find upgrade test '" + upgradeTestToFind + "' that covers '"
+						+ typeSerializer.getName() + "'.");
 			}
 		}
 	}
